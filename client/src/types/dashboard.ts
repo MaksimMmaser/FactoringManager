@@ -17,7 +17,7 @@ export interface TurnoverPoint {
     days: number
 }
 //бизнес статусы
-export type OperationStatus = 'Financed'|'Pending'|'Paid'|'Overdur';
+export type OperationStatus = 'Financed'|'Pending'|'Paid'|'Overdue';
 //запись в реестре последних событий
 export interface RecentOperation {
     id:string,
