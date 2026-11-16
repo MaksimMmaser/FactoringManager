@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { Building2, AlertCircle, ShieldAlert, Check, ShieldCheck } from 'lucide-react';
+import { Building2, AlertCircle, Check, ShieldCheck } from 'lucide-react';
 import type { DebtorItem, DebtorRiskCategory } from '../types/dashboard';
 
 interface CreateDebtorModalProps {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UserPlus, Search, Filter, Check, ChevronDown, Building2, CheckCircle2 } from 'lucide-react';
+import { UserPlus, Search, Filter, Check, ChevronDown, Building2} from 'lucide-react';
 import { CreateClientModal } from '../components/CreateClientModal';
 import type { ClientItem } from '../types/dashboard';
 
