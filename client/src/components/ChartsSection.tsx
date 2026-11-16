@@ -36,9 +36,18 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({ portfolioData, tur
               <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px' }}
-                itemStyle={{ color: '#34d399' }}
-              />
+  contentStyle={{ 
+    backgroundColor: '#0f172a', 
+    borderRadius: '12px', 
+    border: 'none', 
+    color: '#fff', 
+    fontSize: '12px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+  }}
+  itemStyle={{ color: '#34d399', fontWeight: 'bold' }}
+  formatter={(value: any) => [`${value} млн BYN`, 'Объем финансирования']}
+  labelFormatter={(label) => `Месяц: ${label}`}
+/>
               <Area type="monotone" dataKey="amount" stroke="#059669" strokeWidth={3} fillOpacity={1} fill="url(#bankGradient)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -63,9 +72,19 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({ portfolioData, tur
               <XAxis dataKey="counterparty" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
               <Tooltip 
-                cursor={{ fill: '#f8fafc' }}
-                contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px' }}
-              />
+  cursor={{ fill: '#f8fafc' }}
+  contentStyle={{ 
+    backgroundColor: '#0f172a', 
+    borderRadius: '12px', 
+    border: 'none', 
+    color: '#fff', 
+    fontSize: '12px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+  }}
+  itemStyle={{ color: '#34d399', fontWeight: 'bold' }}
+  formatter={(value: any) => [`${value} дней`, 'Срок погашения']}
+  labelFormatter={(label) => `Дебитор: ${label}`}
+/>
               <Bar dataKey="days" fill="#059669" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

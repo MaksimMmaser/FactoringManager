@@ -26,3 +26,56 @@ export interface RecentOperation {
     amount: number,
     status: OperationStatus
 }
+export interface FactoringContract {
+  id: string;
+  contractNumber: string;
+  clientName: string;
+  advanceRate: number;      // например, 0.8 (80%)
+  factoringType: 'WithRecourse' | 'WithoutRecourse';
+  createdAt: string;
+  status: 'Active' | 'UnderReview' | 'Closed';
+}
+// Отдельная товарно-транспортная накладная (ТТН) внутри реестра
+export interface InvoiceItem {
+  id: string;
+  number: string;         // Номер ТТН (например, ТТН-00918)
+  debtorName: string;     // Покупатель (ЗАО "Пинскдрев")
+  amount: number;         // Сумма по накладной в BYN
+  dueDate: string;        // Дата, до которой покупатель должен вернуть деньги
+}
+
+// Реестр переданных денежных требований
+export interface FactoringRegistry {
+  id: string;
+  registryNumber: string; // Номер реестра (РЕЕСТР-406/12)
+  contractNumber: string; // По какому договору финансируется
+  clientName: string;     // Клиент банка (Поставщик)
+  createdAt: string;      // Дата передачи в банк
+  totalAmount: number;    // Общая сумма требований
+  advanceAmount: number;  // Сумма профинансированного аванса (80%)
+  commissionAmount: number; // Комиссионное вознаграждение банка (2.5%)
+  status: 'Financed' | 'UnderReview' | 'Rejected';
+  invoices: InvoiceItem[];// Список накладных
+}
+// клиент банка - поставщик 
+export interface ClientItem {
+    id:string,
+    name: string,
+    unp:string, //Унп(9 цифр)
+    iban: string,//расчетный счет
+    factoringLimit: number,//утвержденный лимит
+    usedLimit:number,
+    rating: 'A'|'B'|'C', // рейтинг надежности
+    activeContractsCount:number
+}
+export type DebtorRiskCategory = 'Reliable' | 'UnderControl' | 'StopList';
+export interface DebtorItem {
+    id:string,
+    name:string,
+    unp:string,
+    subLimit:number,
+    currentDebt: number,
+    averagePaymentDays:number;
+    riskCategory: DebtorRiskCategory,
+    overdueDebt: number
+}
