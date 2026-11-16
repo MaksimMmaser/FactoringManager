@@ -6,6 +6,8 @@ import {
   CalendarDays,
   Search,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Check,
   CheckCircle2,
   Clock,
@@ -18,10 +20,8 @@ import {
   Loader2,
   X,
   Building2,
-  RefreshCw,
   RotateCcw,
   Filter,
-  SlidersHorizontal
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -34,14 +34,14 @@ import {
 } from 'recharts';
 
 // ==========================================
-// ДИЗАЙН-ТОКЕНЫ И КОНСТАНТЫ
+// ДИЗАЙН-ТОКЕНЫ
 // ==========================================
 const BRAND = {
   emerald: {
     50: '#ecfdf5',
     100: '#d1fae5',
     500: '#10b981',
-    600: '#059669', // Основной корпоративный изумрудный
+    600: '#059669',
     700: '#047857',
   },
   slate: {
@@ -57,9 +57,6 @@ const BRAND = {
   }
 };
 
-// ==========================================
-// ТИПЫ ДАННЫХ
-// ==========================================
 type ReportType = 'RECONCILIATION' | 'OVERDUE' | 'REVENUE';
 type PeriodType = 'MONTH' | 'QUARTER' | 'YEAR' | 'CUSTOM';
 type ScreenState = 'idle' | 'loading' | 'success' | 'empty' | 'error';
@@ -83,9 +80,6 @@ interface InvoiceRow {
   status: 'Financed' | 'Pending';
 }
 
-// ==========================================
-// МОКОВЫЕ ДАННЫЕ
-// ==========================================
 const MOCK_CLIENTS: ClientItem[] = [
   {
     id: 'kuzlitmash',
@@ -185,9 +179,6 @@ const MOCK_INVOICES: Record<string, InvoiceRow[]> = {
   meat_pinsk: [],
 };
 
-// ==========================================
-// ФОРМАТИРОВАНИЕ ДЕНЕГ
-// ==========================================
 const formatBYN = (val: number): string =>
   new Intl.NumberFormat('ru-BY', {
     minimumFractionDigits: 2,
@@ -195,23 +186,209 @@ const formatBYN = (val: number): string =>
   }).format(val) + ' BYN';
 
 // ==========================================
-// ГЛАВНЫЙ КОМПОНЕНТ
+// 🎯 КАСТОМНЫЙ БАНКОВСКИЙ DATEPICKER (RU, EMERALD)
+// ==========================================
+interface BankDatePickerProps {
+  label: string;
+  value: string; // Формат 'YYYY-MM-DD'
+  onChange: (val: string) => void;
+}
+
+const MONTH_NAMES_RU = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+];
+const WEEKDAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+const BankDatePicker: React.FC<BankDatePickerProps> = ({ label, value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Парсим дату
+  const [currentYear, currentMonth, currentDay] = useMemo(() => {
+    const parts = value.split('-').map(Number);
+    return [parts[0] || 2026, (parts[1] || 11) - 1, parts[2] || 1];
+  }, [value]);
+
+  const [viewYear, setViewYear] = useState(currentYear);
+  const [viewMonth, setViewMonth] = useState(currentMonth);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Генерация дней месяца
+  const calendarGrid = useMemo(() => {
+    const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay();
+    // Коррекция: понедельник = 0, воскресенье = 6
+    const startOffset = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+    const cells: (number | null)[] = [];
+    for (let i = 0; i < startOffset; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    return cells;
+  }, [viewYear, viewMonth]);
+
+  const handlePrevMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear(prev => prev - 1);
+    } else {
+      setViewMonth(prev => prev - 1);
+    }
+  };
+
+  const handleNextMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear(prev => prev + 1);
+    } else {
+      setViewMonth(prev => prev + 1);
+    }
+  };
+
+  const handleSelectDay = (day: number) => {
+    const mStr = String(viewMonth + 1).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    onChange(`${viewYear}-${mStr}-${dStr}`);
+    setIsOpen(false);
+  };
+
+  // Красивое отображение ДД.ММ.ГГГГ
+  const displayFormatted = useMemo(() => {
+    const parts = value.split('-');
+    if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    return value;
+  }, [value]);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <label className="text-[11px] text-slate-500 font-semibold block mb-1">{label}</label>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-bank-500/20 focus:border-bank-500 transition-colors"
+      >
+        <span>{displayFormatted}</span>
+        <CalendarDays className="w-3.5 h-3.5 text-slate-400" />
+      </button>
+
+      {/* Выпадающее окно календаря */}
+      {isOpen && (
+        <div className="absolute left-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+          {/* Шапка календаря */}
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="p-1 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-xs font-bold text-slate-900">
+              {MONTH_NAMES_RU[viewMonth]} {viewYear}
+            </span>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-1 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Дни недели */}
+          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+            {WEEKDAYS_RU.map((w) => (
+              <span key={w} className="text-[10px] font-bold text-slate-400">
+                {w}
+              </span>
+            ))}
+          </div>
+
+          {/* Сетка чисел */}
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {calendarGrid.map((day, idx) => {
+              if (day === null) {
+                return <span key={`empty-${idx}`} className="h-7 w-7" />;
+              }
+
+              const isSelected =
+                viewYear === currentYear &&
+                viewMonth === currentMonth &&
+                day === currentDay;
+
+              return (
+                <button
+                  key={`day-${day}`}
+                  type="button"
+                  onClick={() => handleSelectDay(day)}
+                  className={`h-7 w-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-all ${
+                    isSelected
+                      ? 'bg-bank-600 text-white font-bold shadow-xs'
+                      : 'text-slate-700 hover:bg-bank-50 hover:text-bank-700'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Быстрый выбор: Сегодня */}
+          <div className="pt-2 mt-2 border-t border-slate-100 flex justify-between items-center text-[11px]">
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                onChange(`${y}-${m}-${d}`);
+                setIsOpen(false);
+              }}
+              className="text-bank-600 font-bold hover:underline"
+            >
+              Сегодня
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==========================================
+// ГЛАВНЫЙ ЭКРАН ОТЧЕТОВ
 // ==========================================
 export default function FactoringReportsView() {
-  // --- Состояния параметров ---
   const [reportType, setReportType] = useState<ReportType>('RECONCILIATION');
   const [period, setPeriod] = useState<PeriodType>('MONTH');
   const [customDateFrom, setCustomDateFrom] = useState('2026-11-01');
   const [customDateTo, setCustomDateTo] = useState('2026-11-30');
   const [selectedClientId, setSelectedClientId] = useState('kuzlitmash');
 
-  // --- Состояния UI контролов ---
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // --- Состояние генерации / обратная связь ---
   const [screenState, setScreenState] = useState<ScreenState>('success');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [appliedParams, setAppliedParams] = useState({
@@ -221,7 +398,6 @@ export default function FactoringReportsView() {
     generatedAt: '16.11.2026, 14:35',
   });
 
-  // Закрытие выпадающего списка при клике вне
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -232,14 +408,12 @@ export default function FactoringReportsView() {
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Автозакрытие тоста
   useEffect(() => {
     if (!toastMessage) return;
     const timer = setTimeout(() => setToastMessage(null), 3500);
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // Фильтр списка клиентов в поиске
   const filteredClients = useMemo(() => {
     return MOCK_CLIENTS.filter(
       (c) =>
@@ -258,22 +432,15 @@ export default function FactoringReportsView() {
     [appliedParams.clientId]
   );
 
-  // Итоговые агрегаты
   const totals = useMemo(() => {
     const totalAmount = activeInvoices.reduce((s, i) => s + i.amount, 0);
     const totalAdvance = activeInvoices.reduce((s, i) => s + i.advance, 0);
     const totalFee = activeInvoices.reduce((s, i) => s + i.fee, 0);
     const freeLimit = Math.max(0, activeClient.factoringLimit - activeClient.usedLimit);
 
-    return {
-      totalAmount,
-      totalAdvance,
-      totalFee,
-      freeLimit,
-    };
+    return { totalAmount, totalAdvance, totalFee, freeLimit };
   }, [activeInvoices, activeClient]);
 
-  // Данные для Recharts
   const invoicesChartData = useMemo(() => {
     return activeInvoices.map((inv) => ({
       name: inv.number,
@@ -284,31 +451,23 @@ export default function FactoringReportsView() {
   }, [activeInvoices]);
 
   const limitChartData = useMemo(() => {
-    return [
-      {
-        name: 'Лимит',
-        used: activeClient.usedLimit,
-        available: totals.freeLimit,
-      },
-    ];
+    return [{
+      name: 'Лимит',
+      used: activeClient.usedLimit,
+      available: totals.freeLimit,
+    }];
   }, [activeClient, totals.freeLimit]);
 
-  // Генерация отчета
   const handleGenerate = () => {
     setScreenState('loading');
     setTimeout(() => {
-      // Имитация: если выбран клиент без накладных — empty
       if (selectedClientId === 'meat_pinsk') {
         setAppliedParams({
           reportType,
           period,
           clientId: selectedClientId,
           generatedAt: new Date().toLocaleString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
           }),
         });
         setScreenState('empty');
@@ -321,11 +480,7 @@ export default function FactoringReportsView() {
         period,
         clientId: selectedClientId,
         generatedAt: new Date().toLocaleString('ru-RU', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
+          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
         }),
       });
       setScreenState('success');
@@ -341,7 +496,7 @@ export default function FactoringReportsView() {
     MONTH: 'Текущий месяц',
     QUARTER: '3 квартал 2026',
     YEAR: '2026 год',
-    CUSTOM: `С ${customDateFrom} по ${customDateTo}`,
+    CUSTOM: `С ${customDateFrom.split('-').reverse().join('.')} по ${customDateTo.split('-').reverse().join('.')}`,
   };
 
   const reportTitleMap: Record<ReportType, string> = {
@@ -351,10 +506,8 @@ export default function FactoringReportsView() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-800 antialiased p-4 sm:p-6 lg:p-8 font-sans">
-      {/* ==================================================================== */}
-      {/* ВСПЛЫВАЮЩИЙ TOAST                                                    */}
-      {/* ==================================================================== */}
+    <div className="min-h-screen bg-slate-100/70 text-slate-800 antialiased p-3 sm:p-6 lg:p-8 font-sans">
+      {/* TOAST */}
       {toastMessage && (
         <div
           role="status"
@@ -373,38 +526,36 @@ export default function FactoringReportsView() {
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* ШАПКА СТРАНИЦЫ (print:hidden)                                       */}
-      {/* ==================================================================== */}
+      {/* ШАПКА СТРАНИЦЫ */}
       <header className="mb-6 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
               Отчётно-аналитические формы
             </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
               ЦБУ №406 в г. Пинск • ОАО «Белинвестбанк» • Реестр факторингового портфеля
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm self-start sm:self-auto">
-            <Building2 className="w-4 h-4 text-emerald-600" />
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-xs self-start sm:self-auto">
+            <Building2 className="w-4 h-4 text-bank-600" />
             <span>Система факторингового учёта v2.4</span>
           </div>
         </div>
 
-        {/* Кнопка аккордеона на мобильных (< lg) */}
+        {/* Мобильный аккордеон */}
         <div className="mt-4 lg:hidden">
           <button
             onClick={() => setIsAccordionOpen(!isAccordionOpen)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm min-h-[44px]"
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 shadow-xs min-h-[44px]"
             aria-expanded={isAccordionOpen}
           >
-            <span className="flex items-center gap-2">
-              <SlidersHorizontal className="w-4 h-4 text-emerald-600" />
-              Параметры формирования ({reportTitleMap[reportType]})
+            <span className="flex items-center gap-2 truncate pr-2">
+              <Filter className="w-4 h-4 text-bank-600 shrink-0" />
+              <span className="truncate">Параметры: {reportTitleMap[reportType]}</span>
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${
+              className={`w-4 h-4 text-slate-500 shrink-0 transition-transform duration-200 ${
                 isAccordionOpen ? 'rotate-180' : ''
               }`}
             />
@@ -412,25 +563,19 @@ export default function FactoringReportsView() {
         </div>
       </header>
 
-      {/* ==================================================================== */}
-      {/* ОСНОВНОЙ ДВУХКОЛОНОЧНЫЙ МАКЕТ                                         */}
-      {/* ==================================================================== */}
+      {/* СЕТКА */}
       <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-start">
-        {/* ================================================================== */}
-        {/* ЛЕВАЯ КОЛОНКА: ПАНЕЛЬ ПАРАМЕТРОВ                                   */}
-        {/* ================================================================== */}
+        {/* ЛЕВАЯ КОЛОНКА: ПАРАМЕТРЫ */}
         <aside
-          className={`space-y-5 bg-white border border-slate-200 rounded-xl p-5 shadow-sm print:hidden lg:sticky lg:top-6 transition-all duration-200 ${
+          className={`space-y-5 bg-white border border-slate-200 rounded-xl p-5 shadow-xs print:hidden lg:sticky lg:top-6 transition-all duration-200 ${
             isAccordionOpen ? 'block' : 'hidden lg:block'
           }`}
           aria-label="Параметры генерации отчёта"
         >
-          {/* СЕКЦИЯ 1: ТИП ДОКУМЕНТА */}
+          {/* Тип документа */}
           <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-sm font-semibold text-slate-800">
-                Тип документа
-              </span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-slate-800">Тип документа</span>
               <span className="text-xs text-slate-500 font-normal">Шаблон</span>
             </div>
 
@@ -464,17 +609,15 @@ export default function FactoringReportsView() {
                     role="radio"
                     aria-checked={isSelected}
                     onClick={() => setReportType(item.id)}
-                    className={`w-full min-h-[52px] p-3 rounded-lg border text-left transition-all relative flex items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                    className={`w-full min-h-[50px] p-3 rounded-lg border text-left transition-all relative flex items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                       isSelected
-                        ? 'border-emerald-600 bg-emerald-50/50 shadow-sm border-[2px]'
+                        ? 'border-bank-600 bg-bank-50/50 shadow-xs border-[2px]'
                         : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/70'
                     }`}
                   >
                     <div
                       className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-100 text-slate-600'
+                        isSelected ? 'bg-bank-600 text-white' : 'bg-slate-100 text-slate-600'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -488,7 +631,7 @@ export default function FactoringReportsView() {
                       </span>
                     </div>
                     {isSelected && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-bank-600 text-white flex items-center justify-center shadow-xs">
                         <Check className="w-3 h-3 stroke-[3]" />
                       </div>
                     )}
@@ -498,14 +641,13 @@ export default function FactoringReportsView() {
             </div>
           </div>
 
-          {/* СЕКЦИЯ 2: ПЕРИОД */}
+          {/* Период */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-slate-800">Период</span>
               <span className="text-xs text-slate-500 font-mono">2026</span>
             </div>
 
-            {/* Сегментированный контрол */}
             <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs">
               {[
                 { id: 'MONTH' as PeriodType, label: 'Месяц' },
@@ -519,7 +661,7 @@ export default function FactoringReportsView() {
                   onClick={() => setPeriod(p.id)}
                   className={`py-2 px-1 rounded-md font-semibold transition-all text-center min-h-[36px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                     period === p.id
-                      ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                      ? 'bg-white text-bank-700 shadow-xs border border-slate-200'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -528,55 +670,43 @@ export default function FactoringReportsView() {
               ))}
             </div>
 
-            {/* Произвольный выбор дат */}
+            {/* 🎯 НАШ КАСТОМНЫЙ КАЛЕНДАРЬ В СТИЛЕ БЕЛИНВЕСТБАНКА */}
             {period === 'CUSTOM' && (
-              <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5 animate-in fade-in duration-150">
+              <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 animate-in fade-in duration-150">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                  <CalendarDays className="w-3.5 h-3.5 text-emerald-600" />
+                  <CalendarDays className="w-3.5 h-3.5 text-bank-600" />
                   <span>Интервал формирования:</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="text-[11px] text-slate-500 block mb-1">С даты</label>
-                    <input
-                      type="date"
-                      value={customDateFrom}
-                      onChange={(e) => setCustomDateFrom(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-slate-500 block mb-1">По дату</label>
-                    <input
-                      type="date"
-                      value={customDateTo}
-                      onChange={(e) => setCustomDateTo(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                    />
-                  </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <BankDatePicker
+                    label="С даты"
+                    value={customDateFrom}
+                    onChange={(val) => setCustomDateFrom(val)}
+                  />
+                  <BankDatePicker
+                    label="По дату"
+                    value={customDateTo}
+                    onChange={(val) => setCustomDateTo(val)}
+                  />
                 </div>
               </div>
             )}
           </div>
 
-          {/* СЕКЦИЯ 3: КОНТРАГЕНТ (МАСШТАБИРУЕМЫЙ ВЫПАДАЮЩИЙ СПИСОК С ПОИСКОМ) */}
+          {/* Контрагент */}
           <div className="relative" ref={dropdownRef}>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-semibold text-slate-800">
-                Контрагент (Клиент)
-              </span>
+              <span className="text-sm font-semibold text-slate-800">Контрагент (Клиент)</span>
               <span className="text-xs text-slate-500">УНП 9 цифр</span>
             </div>
 
             <button
               type="button"
               onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
-              className="w-full flex items-center justify-between px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-left shadow-xs hover:border-slate-300 min-h-[42px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 transition-colors"
-              aria-haspopup="listbox"
-              aria-expanded={isClientDropdownOpen}
+              className="w-full flex items-center justify-between px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-left shadow-xs hover:border-slate-300 min-h-[42px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 transition-colors"
             >
               <div className="truncate pr-2">
-                <span className="font-semibold text-slate-900 block truncate">
+                <span className="font-semibold text-slate-900 block truncate text-xs sm:text-sm">
                   {MOCK_CLIENTS.find((c) => c.id === selectedClientId)?.name}
                 </span>
                 <span className="text-xs text-slate-500 font-mono block">
@@ -585,12 +715,11 @@ export default function FactoringReportsView() {
               </div>
               <ChevronDown
                 className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
-                  isClientDropdownOpen ? 'rotate-180 text-emerald-600' : ''
+                  isClientDropdownOpen ? 'rotate-180 text-bank-600' : ''
                 }`}
               />
             </button>
 
-            {/* Выпадающее меню с поисковой строкой */}
             {isClientDropdownOpen && (
               <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="relative">
@@ -604,10 +733,7 @@ export default function FactoringReportsView() {
                   />
                 </div>
 
-                <div
-                  role="listbox"
-                  className="max-h-48 overflow-y-auto space-y-1 divide-y divide-slate-100"
-                >
+                <div role="listbox" className="max-h-48 overflow-y-auto space-y-1 divide-y divide-slate-100">
                   {filteredClients.length === 0 ? (
                     <div className="p-3 text-center text-xs text-slate-500 font-medium">
                       Контрагенты не найдены
@@ -619,8 +745,6 @@ export default function FactoringReportsView() {
                         <button
                           key={client.id}
                           type="button"
-                          role="option"
-                          aria-selected={isSelected}
                           onClick={() => {
                             setSelectedClientId(client.id);
                             setIsClientDropdownOpen(false);
@@ -628,7 +752,7 @@ export default function FactoringReportsView() {
                           }}
                           className={`w-full text-left p-2 rounded-md transition-colors flex items-center justify-between text-xs min-h-[38px] ${
                             isSelected
-                              ? 'bg-emerald-50 text-emerald-900 font-semibold'
+                              ? 'bg-bank-50 text-bank-900 font-semibold'
                               : 'hover:bg-slate-50 text-slate-700'
                           }`}
                         >
@@ -638,9 +762,7 @@ export default function FactoringReportsView() {
                               УНП {client.unp}
                             </span>
                           </div>
-                          {isSelected && (
-                            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                          )}
+                          {isSelected && <Check className="w-4 h-4 text-bank-600 shrink-0" />}
                         </button>
                       );
                     })
@@ -650,13 +772,13 @@ export default function FactoringReportsView() {
             )}
           </div>
 
-          {/* КНОПКА ГЕНЕРАЦИИ (PRIMARY НА ВСЮ ШИРИНУ) */}
+          {/* Кнопка генерации */}
           <div className="pt-2">
             <button
               type="button"
               disabled={screenState === 'loading'}
               onClick={handleGenerate}
-              className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-lg shadow-sm shadow-emerald-700/20 transition-all active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-bank-600 hover:bg-bank-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold text-xs sm:text-sm rounded-lg shadow-xs shadow-emerald-700/20 transition-all active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             >
               {screenState === 'loading' ? (
                 <>
@@ -673,36 +795,28 @@ export default function FactoringReportsView() {
           </div>
         </aside>
 
-        {/* ================================================================== */}
-        {/* ПРАВАЯ КОЛОНКА: ТУЛБАР И ПРЕДПРОСМОТР ДОКУМЕНТА (А4)              */}
-        {/* ================================================================== */}
-        <main className="space-y-4 min-w-0">
-          {/* ТУЛБАР НАД ДОКУМЕНТОМ (print:hidden) */}
-          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
-            {/* Чипы применённых параметров */}
+        {/* ПРАВАЯ КОЛОНКА: ТУЛБАР И ДОКУМЕНТ */}
+        <main className="space-y-4 min-w-0 w-full">
+          {/* Тулбар */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <span className="text-slate-500 font-medium mr-1 flex items-center gap-1">
                 <Filter className="w-3.5 h-3.5 text-slate-400" />
                 Применено:
               </span>
-              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
+              <span className="bg-bank-50 text-bank-800 border border-bank-200 font-semibold px-2 py-0.5 rounded-md text-[11px] sm:text-xs">
                 {activeClient.name.split(' ')[1] || activeClient.name}
               </span>
-              <span className="bg-slate-100 text-slate-700 border border-slate-200 font-medium px-2.5 py-1 rounded-md">
+              <span className="bg-slate-100 text-slate-700 border border-slate-200 font-medium px-2 py-0.5 rounded-md text-[11px] sm:text-xs">
                 {periodLabelMap[appliedParams.period]}
-              </span>
-              <span className="bg-slate-100 text-slate-700 border border-slate-200 font-medium px-2.5 py-1 rounded-md">
-                {reportTitleMap[appliedParams.reportType]}
               </span>
             </div>
 
-            {/* Кнопки действий с документом */}
             <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
               <button
                 type="button"
                 onClick={handlePrint}
-                className="min-h-[40px] px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                aria-label="Печать документа или экспорт в PDF"
+                className="min-h-[38px] px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
               >
                 <Printer className="w-4 h-4 text-slate-600" />
                 <span>Печать / PDF</span>
@@ -710,8 +824,7 @@ export default function FactoringReportsView() {
               <button
                 type="button"
                 onClick={() => setToastMessage('Выгрузка Excel (.xlsx) успешно инициирована')}
-                className="min-h-[40px] px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                aria-label="Экспорт ведомости в Excel"
+                className="min-h-[38px] px-3 py-1.5 bg-bank-600 hover:bg-bank-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>Экспорт Excel</span>
@@ -719,109 +832,52 @@ export default function FactoringReportsView() {
             </div>
           </div>
 
-          {/* ================================================================ */}
-          {/* ГРАФИК АНАЛИЗА ТТН (print:hidden)                                */}
-          {/* ================================================================ */}
+          {/* График ТТН (print:hidden) */}
           {screenState === 'success' && activeInvoices.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm print:hidden">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs print:hidden">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Соотношение: Сумма уступки vs Аванс (80%) vs Дисконт банка
+                  Анализ сумм требований по накладным
                 </span>
-                <span className="text-xs text-slate-500">По накладным</span>
+                <span className="text-xs text-slate-500">BYN</span>
               </div>
-              <div
-                className="h-44 w-full"
-                role="region"
-                aria-label="График распределения сумм по накладным"
-              >
+              <div className="h-44 w-full" role="region" aria-label="График распределения сумм по накладным">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={invoicesChartData}
-                    margin={{ top: 5, right: 10, left: -15, bottom: 0 }}
-                  >
+                  <BarChart data={invoicesChartData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis
-                      dataKey="name"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: BRAND.slate[500], fontSize: 12 }}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: BRAND.slate[500], fontSize: 12 }}
-                    />
+                    <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: BRAND.slate[500], fontSize: 11 }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fill: BRAND.slate[500], fontSize: 11 }} />
                     <Tooltip
-                      contentStyle={{
-                        backgroundColor: BRAND.slate[900],
-                        borderRadius: '8px',
-                        border: 'none',
-                        color: '#fff',
-                        fontSize: '12px',
-                      }}
-                      formatter={(val: any) => [formatBYN(val), '']}
+                      contentStyle={{ backgroundColor: BRAND.slate[900], borderRadius: '8px', border: 'none', color: '#fff', fontSize: '12px' }}
+                      formatter={(val: any) => [formatBYN(Number(val) || 0), '']}
                     />
-                    <Bar
-                      name="Сумма уступки"
-                      dataKey="amount"
-                      fill={BRAND.slate[500]}
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar
-                      name="Аванс банка"
-                      dataKey="advance"
-                      fill={BRAND.emerald[600]}
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar
-                      name="Дисконт (комиссия)"
-                      dataKey="fee"
-                      fill={BRAND.amber[600]}
-                      radius={[4, 4, 0, 0]}
-                    />
+                    <Bar name="Сумма уступки" dataKey="amount" fill={BRAND.slate[500]} radius={[4, 4, 0, 0]} />
+                    <Bar name="Аванс банка (80%)" dataKey="advance" fill={BRAND.emerald[600]} radius={[4, 4, 0, 0]} />
+                    <Bar name="Дисконт" dataKey="fee" fill={BRAND.amber[600]} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           )}
 
-          {/* ================================================================ */}
-          {/* ЭКРАННЫЕ СОСТОЯНИЯ: LOADING / EMPTY / ERROR / ДОКУМЕНТ           */}
-          {/* ================================================================ */}
+          {/* Загрузка */}
           {screenState === 'loading' && (
-            <div className="bg-white border border-slate-200 rounded-xl p-10 shadow-sm text-center space-y-4">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+            <div className="bg-white border border-slate-200 rounded-xl p-10 shadow-xs text-center space-y-4">
+              <Loader2 className="w-8 h-8 animate-spin text-bank-600 mx-auto" />
               <div className="space-y-1">
-                <p className="text-base font-semibold text-slate-800">
-                  Формирование финансового реестра
-                </p>
-                <p className="text-xs text-slate-500">
-                  Сверка кредитных лимитов, расчёт дисконта и проверка электронных подписей...
-                </p>
-              </div>
-              {/* Скелетон таблицы */}
-              <div className="max-w-2xl mx-auto space-y-2 pt-4">
-                <div className="h-6 bg-slate-100 rounded-md animate-pulse" />
-                <div className="h-8 bg-slate-100 rounded-md animate-pulse" />
-                <div className="h-8 bg-slate-100 rounded-md animate-pulse" />
-                <div className="h-8 bg-slate-100 rounded-md animate-pulse" />
+                <p className="text-base font-semibold text-slate-800">Формирование финансового реестра</p>
+                <p className="text-xs text-slate-500">Сверка кредитных лимитов и расчет дисконта...</p>
               </div>
             </div>
           )}
 
+          {/* Пусто */}
           {screenState === 'empty' && (
-            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm space-y-3">
+            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center shadow-xs space-y-3">
               <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mx-auto">
                 <FileX className="w-6 h-6" />
               </div>
-              <p className="text-base font-bold text-slate-800">
-                За выбранный период операции не зарегистрированы
-              </p>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                По контрагенту {activeClient.name} отсутствуют уступленные денежные
-                требования. Измените диапазон дат или выберите другого клиента.
-              </p>
+              <p className="text-base font-bold text-slate-800">За выбранный период операции не зарегистрированы</p>
               <button
                 type="button"
                 onClick={() => {
@@ -836,85 +892,126 @@ export default function FactoringReportsView() {
             </div>
           )}
 
-          {screenState === 'error' && (
-            <div className="bg-white border border-rose-200 rounded-xl p-10 text-center shadow-sm space-y-3">
-              <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 mx-auto">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <p className="text-base font-bold text-slate-900">
-                Ошибка построения банковского документа
-              </p>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Не удалось связаться с модулем расчёта процентов факторингового шлюза ЦБУ.
-              </p>
-              <button
-                type="button"
-                onClick={handleGenerate}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Повторить запрос
-              </button>
-            </div>
-          )}
-
-          {/* ================================================================ */}
-          {/* ОФИЦИАЛЬНЫЙ ЛИСТ А4 (ПРЕДПРОСМОТР ДОКУМЕНТА)                     */}
-          {/* ================================================================ */}
+          {/* ОФИЦИАЛЬНЫЙ ДОКУМЕНТ А4 */}
           {screenState === 'success' && (
             <article
               id="factoring-document-sheet"
               aria-label="Официальный бланк документа"
-              className="bg-white border border-slate-200 shadow-md rounded-xl p-6 sm:p-10 lg:p-12 max-w-[794px] mx-auto text-slate-900 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:rounded-none"
+              className="bg-white border border-slate-200 shadow-md rounded-2xl p-4 sm:p-8 lg:p-12 max-w-[794px] mx-auto text-slate-900 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:rounded-none"
             >
-              {/* ШАПКА БАНКА И СТАТУС ЭЦП */}
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between pb-5 border-b-2 border-slate-900 gap-4">
+              {/* Шапка бланка */}
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between pb-5 border-b-2 border-slate-900 gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold tracking-tight text-slate-900">
+                    <span className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
                       ОАО «Белинвестбанк»
                     </span>
-                    <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded">
+                    <span className="px-2 py-0.5 bg-bank-50 border border-bank-200 text-bank-800 text-[10px] sm:text-xs font-bold rounded">
                       ЦБУ №406
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                  <p className="text-xs text-slate-600 mt-0.5 font-medium">
                     Центр банковских услуг №406, г. Пинск, ул. Завальная, 15
                   </p>
-                  <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    УНП: 807000028 • БИК (BIC): BLBBY2X • ОКПО: 09801244
+                  <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
+                    УНП: 807000028 • БИК: BLBBY2X
                   </p>
                 </div>
 
                 <div className="text-left sm:text-right shrink-0">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs font-semibold mb-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-bank-50 border border-bank-200 text-bank-800 rounded-md text-[11px] sm:text-xs font-semibold mb-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-bank-600 shrink-0" />
                     <span>ЭЦП валидна (КриптоПро)</span>
                   </div>
-                  <span className="text-xs text-slate-500 block font-medium">
-                    Дата выгрузки: <span className="font-mono text-slate-700">{appliedParams.generatedAt}</span>
+                  <span className="text-[11px] sm:text-xs text-slate-500 block font-medium">
+                    Дата: <span className="font-mono text-slate-700">{appliedParams.generatedAt}</span>
                   </span>
                 </div>
               </div>
 
-              {/* ЗАГОЛОВОК ДОКУМЕНТА */}
-              <div className="text-center my-6">
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight uppercase">
+              {/* Заголовок */}
+              <div className="text-center my-5 sm:my-6">
+                <h2 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight uppercase">
                   {reportTitleMap[appliedParams.reportType]}
                 </h2>
                 <p className="text-xs text-slate-600 mt-1">
-                  по генеральному договору факторинга с клиентом{' '}
+                  по договору факторинга с клиентом{' '}
                   <span className="font-bold text-slate-900">{activeClient.name}</span>
                 </p>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">
-                  УНП: {activeClient.unp} • Р/с: {activeClient.iban} • Период: {periodLabelMap[appliedParams.period]}
+                <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
+                  УНП: {activeClient.unp} • {periodLabelMap[appliedParams.period]}
                 </p>
               </div>
 
-              {/* ТАБЛИЦА ТТН */}
-              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              {/* 1. МОБИЛЬНЫЙ ВИД БЕЗ СКРОЛЛА (< md И ТОЛЬКО НА ЭКРАНЕ) */}
+              <div className="space-y-3 md:hidden print:hidden">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Перечень требований (ТТН) в акте:
+                </span>
+
+                {activeInvoices.map((inv) => (
+                  <div key={inv.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-slate-900 text-sm">{inv.number}</span>
+                      {inv.status === 'Financed' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Профинансировано
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          На проверке
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-slate-600">
+                      Покупатель: <strong className="text-slate-800">{inv.debtor}</strong>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-200 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Уступка</span>
+                        <span className="font-mono font-semibold text-slate-800 block">{formatBYN(inv.amount)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Аванс (80%)</span>
+                        <span className="font-mono font-bold text-bank-700 block">{formatBYN(inv.advance)}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Дисконт</span>
+                        <span className="font-mono text-slate-700 block">{formatBYN(inv.fee)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="p-4 bg-slate-100 rounded-xl border border-slate-300 space-y-2 text-xs">
+                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">
+                    Итоговые обязательства по акту:
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Всего сумма уступки:</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{formatBYN(totals.totalAmount)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-500 block">Всего выплачен аванс:</span>
+                      <span className="text-sm font-black font-mono text-bank-700">{formatBYN(totals.totalAdvance)}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-200 text-[11px]">
+                    <span className="text-slate-500">Комиссионный доход ЦБУ:</span>
+                    <span className="font-bold font-mono text-slate-800">{formatBYN(totals.totalFee)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. ДЕСКТОПНЫЙ ВИД И ПЕЧАТЬ А4 */}
+              <div className="hidden md:block print:block border border-slate-200 rounded-lg overflow-hidden">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 sticky top-0">
+                  <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                     <tr>
                       <th className="py-2.5 px-3">Номер ТТН</th>
                       <th className="py-2.5 px-3">Дебитор (Покупатель)</th>
@@ -927,16 +1024,12 @@ export default function FactoringReportsView() {
                   <tbody className="divide-y divide-slate-200 text-slate-800">
                     {activeInvoices.map((inv) => (
                       <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                          {inv.number}
-                        </td>
-                        <td className="py-2.5 px-3 font-medium text-slate-700">
-                          {inv.debtor}
-                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{inv.number}</td>
+                        <td className="py-2.5 px-3 font-medium text-slate-700">{inv.debtor}</td>
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-slate-900">
                           {formatBYN(inv.amount)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-emerald-700">
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-bank-700">
                           {formatBYN(inv.advance)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700">
@@ -944,12 +1037,12 @@ export default function FactoringReportsView() {
                         </td>
                         <td className="py-2.5 px-3 text-center">
                           {inv.status === 'Financed' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               Профинансировано
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                               <Clock className="w-3 h-3 text-amber-600" />
                               На рассмотрении
                             </span>
@@ -959,7 +1052,6 @@ export default function FactoringReportsView() {
                     ))}
                   </tbody>
 
-                  {/* СТРОКА ИТОГО */}
                   <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-300 text-slate-900">
                     <tr>
                       <td colSpan={2} className="py-3 px-3 uppercase text-xs tracking-wider text-slate-700">
@@ -968,7 +1060,7 @@ export default function FactoringReportsView() {
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-sm font-bold text-slate-900">
                         {formatBYN(totals.totalAmount)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-sm font-bold text-emerald-700">
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-sm font-bold text-bank-700">
                         {formatBYN(totals.totalAdvance)}
                       </td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-sm font-bold text-slate-900">
@@ -980,116 +1072,78 @@ export default function FactoringReportsView() {
                 </table>
               </div>
 
-              {/* ============================================================ */}
-              {/* ИТОГОВЫЙ БЛОК ЛИМИТОВ И ИХ УТИЛИЗАЦИИ ВНУТРИ ДОКУМЕНТА       */}
-              {/* ============================================================ */}
-              <div className="mt-6 border border-slate-200 rounded-xl p-4 bg-slate-50/60 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  {/* Левая сторона: ключевые цифры лимита */}
-                  <div className="space-y-1">
-                    <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">
-                      Утверждённый кредитный лимит
+              {/* БЛОК ЛИМИТОВ */}
+              <div className="mt-5 sm:mt-6 border border-slate-200 rounded-xl p-3.5 sm:p-4 bg-slate-50/60 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                  <div>
+                    <span className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider block">
+                      Утвержденный кредитный лимит
                     </span>
-                    <span className="text-xl font-bold text-slate-900 font-mono tabular-nums block">
+                    <span className="text-base sm:text-xl font-bold text-slate-900 font-mono tabular-nums block">
                       {formatBYN(activeClient.factoringLimit)}
                     </span>
                   </div>
 
-                  {/* Правая сторона: свободный остаток */}
-                  <div className="sm:text-right space-y-1">
-                    <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">
+                  <div className="sm:text-right">
+                    <span className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider block">
                       Свободный остаток лимита
                     </span>
-                    <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums block">
+                    <span className="text-base sm:text-xl font-bold text-bank-700 font-mono tabular-nums block">
                       {formatBYN(totals.freeLimit)}
                     </span>
                   </div>
                 </div>
 
-                {/* Горизонтальный BarChart лимита (Recharts) */}
-                <div
-                  className="space-y-1 pt-1 print:hidden"
-                  role="region"
-                  aria-label="График использования лимита"
-                >
-                  <div className="flex justify-between text-xs text-slate-600 font-medium">
-                    <span>
-                      Использовано: <strong>{formatBYN(activeClient.usedLimit)}</strong>
-                    </span>
-                    <span>
-                      Свободно: <strong>{formatBYN(totals.freeLimit)}</strong>
-                    </span>
+                <div className="space-y-1 pt-1 print:hidden" role="region" aria-label="График использования лимита">
+                  <div className="flex justify-between text-[11px] text-slate-600 font-medium">
+                    <span>Занято: {formatBYN(activeClient.usedLimit)}</span>
+                    <span>Свободно: {formatBYN(totals.freeLimit)}</span>
                   </div>
-                  <div className="h-6 w-full">
+                  <div className="h-4 sm:h-5 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        layout="vertical"
-                        data={limitChartData}
-                        margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                      >
+                      <BarChart layout="vertical" data={limitChartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                         <XAxis type="number" hide domain={[0, activeClient.factoringLimit]} />
                         <YAxis type="category" dataKey="name" hide />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: BRAND.slate[900],
-                            borderRadius: '8px',
-                            border: 'none',
-                            color: '#fff',
-                            fontSize: '12px',
-                          }}
-                          formatter={(v: any) => [formatBYN(v), '']}
-                        />
-                        <Bar dataKey="used" stackId="limit" fill={BRAND.emerald[600]} radius={[4, 0, 0, 4]} />
-                        <Bar dataKey="available" stackId="limit" fill={BRAND.slate[200]} radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="used" stackId="limit" fill={BRAND.emerald[600]} radius={[3, 0, 0, 3]} />
+                        <Bar dataKey="available" stackId="limit" fill={BRAND.slate[200]} radius={[0, 3, 3, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               </div>
 
-              {/* БЛОК ПОДПИСЕЙ И ПЕЧАТЕЙ */}
-              <div className="mt-12 pt-6 border-t-2 border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-8 text-xs text-slate-700">
-                <div className="space-y-4">
+              {/* ПОДПИСИ И ПЕЧАТИ */}
+              <div className="mt-8 sm:mt-12 pt-5 border-t-2 border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 text-xs text-slate-700">
+                <div className="space-y-3">
                   <div>
-                    <p className="font-semibold text-slate-900">
-                      От ОАО «Белинвестбанк» (ЦБУ №406):
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Специалист сектора корпоративного факторинга
-                    </p>
+                    <p className="font-semibold text-slate-900">От ОАО «Белинвестбанк» (ЦБУ №406):</p>
+                    <p className="text-[11px] text-slate-500">Специалист сектора факторинга</p>
                   </div>
-                  <div className="flex items-center gap-2 pt-4">
-                    <div className="w-36 border-b border-slate-400" />
-                    <span className="font-mono text-slate-600">/ Е. В. Козема /</span>
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="w-28 sm:w-36 border-b border-slate-400" />
+                    <span className="font-mono text-slate-600 text-[11px]">/ Е. В. Козема /</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono block">
-                    Подписано квалифицированной ЭЦП
-                  </span>
                 </div>
 
-                <div className="space-y-4 sm:text-right">
+                <div className="space-y-3 sm:text-right">
                   <div>
-                    <p className="font-semibold text-slate-900">
-                      От Клиента ({activeClient.name}):
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Руководитель / Главный бухгалтер
-                    </p>
+                    <p className="font-semibold text-slate-900">От Клиента ({activeClient.name}):</p>
+                    <p className="text-[11px] text-slate-500">Руководитель / Главный бухгалтер</p>
                   </div>
-                  <div className="flex items-center sm:justify-end gap-2 pt-4">
-                    <div className="w-36 border-b border-slate-400" />
-                    <span className="font-mono text-slate-600">/ ____________ /</span>
+                  <div className="flex items-center sm:justify-end gap-2 pt-2">
+                    <div className="w-28 sm:w-36 border-b border-slate-400" />
+                    <span className="font-mono text-slate-600 text-[11px]">/ ____________ /</span>
                   </div>
-                  <div className="inline-block border border-dashed border-slate-300 rounded-md px-3 py-1 text-[11px] text-slate-400">
+                  <div className="inline-block border border-dashed border-slate-300 rounded px-2.5 py-0.5 text-[10px] text-slate-400">
                     М.П. (Место печати)
                   </div>
                 </div>
               </div>
 
-              {/* ЮРИДИЧЕСКИЙ ФУТЕР БЛАНКА */}
-              <footer className="mt-8 pt-4 border-t border-slate-200 text-center text-[11px] text-slate-500">
-                Акт сформирован автоматически в АС «Факторинг-Онлайн» ОАО «Белинвестбанк».
-                Документ имеет юридическую силу электронного документа в соответствии с Законом РБ № 113-З.
+              {/* Футер */}
+              <footer className="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-500">
+                Акт сформирован автоматически в АС «Факторинг» ЦБУ №406 г. Пинск ОАО «Белинвестбанк».
+                Имеет юридическую силу электронного документа в соответствии с Законом РБ № 113-З.
               </footer>
             </article>
           )}

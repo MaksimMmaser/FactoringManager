@@ -2,11 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 🎯 Железно убираем любые щели у корня браузера */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
 body {
   @apply bg-slate-50 text-slate-800 antialiased font-sans;
 }
 
-/* 🎯 Убираем черную рамку фокуса у графиков Recharts при клике */
+/* Убираем черную рамку фокуса у графиков Recharts при клике */
 .recharts-wrapper,
 .recharts-surface,
 .recharts-wrapper:focus,
