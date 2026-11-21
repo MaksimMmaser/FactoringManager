@@ -2,5 +2,6 @@
   <Project Path="FactoringModule.Application/FactoringModule.Application.csproj" />
   <Project Path="FactoringModule.Domain/FactoringModule.Domain.csproj" />
   <Project Path="FactoringModule.Infrastructure/FactoringModule.Infrastructure.csproj" />
+  <Project Path="FactoringModule.Tests/FactoringModule.Tests.csproj" />
   <Project Path="FactoringModule.WebApi/FactoringModule.WebApi.csproj" />
 </Solution>
