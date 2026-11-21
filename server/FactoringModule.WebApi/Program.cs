@@ -13,6 +13,9 @@ builder.Services.AddDbContext<FactoringDbContext>(options =>
 builder.Services.AddScoped<IClientService, ClientService>();
 builder.Services.AddScoped<IDebtorService, DebtorService>();
 builder.Services.AddScoped<IContractService, ContractService>();
+builder.Services.AddScoped<IRegistryService, RegistryService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
