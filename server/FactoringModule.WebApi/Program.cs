@@ -11,6 +11,8 @@ builder.Services.AddDbContext<FactoringDbContext>(options =>
 
 // Регистрируем наш сервис в DI с временем жизни Scoped
 builder.Services.AddScoped<IClientService, ClientService>();
+builder.Services.AddScoped<IDebtorService, DebtorService>();
+builder.Services.AddScoped<IContractService, ContractService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
