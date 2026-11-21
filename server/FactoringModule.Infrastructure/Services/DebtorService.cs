@@ -3,6 +3,7 @@ using FactoringModule.Application.Interfaces;
 using FactoringModule.Domain.Entities;
 using FactoringModule.Domain.Enums;
 using FactoringModule.Infrastructure.Persistence;
+using FactoringModule.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace FactoringModule.Infrastructure.Services;
@@ -58,7 +59,7 @@ public class DebtorService : IDebtorService
     {
         var exists = await _context.Debtors.AnyAsync(d => d.Unp == dto.Unp, cancellationToken);
         if (exists)
-            throw new InvalidOperationException($"Дебитор с УНП {dto.Unp} уже зарегистрирован в системе.");
+            throw new ConflictException($"Дебитор с УНП {dto.Unp} уже зарегистрирован в системе.");
 
         if (!Enum.TryParse<DebtorRiskCategory>(dto.RiskCategory, ignoreCase: true, out var parsedRisk))
             parsedRisk = DebtorRiskCategory.Reliable;

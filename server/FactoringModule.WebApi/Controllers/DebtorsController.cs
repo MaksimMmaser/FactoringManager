@@ -31,14 +31,10 @@ public class DebtorsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<DebtorDto>> Create([FromBody] CreateDebtorDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
+        
             var created = await _debtorService.CreateAsync(dto, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
+        
+        
     }
 }

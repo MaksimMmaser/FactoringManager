@@ -3,6 +3,7 @@ using FactoringModule.Application.Interfaces;
 using FactoringModule.Domain.Entities;
 using FactoringModule.Domain.Enums;
 using FactoringModule.Infrastructure.Persistence;
+using FactoringModule.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace FactoringModule.Infrastructure.Services;
@@ -89,7 +90,7 @@ public class ContractService : IContractService
             .AnyAsync(c => c.ContractNumber == dto.ContractNumber.Trim(), cancellationToken);
 
         if (contractExists)
-            throw new InvalidOperationException($"Договор с номером {dto.ContractNumber} уже существует.");
+            throw new ConflictException($"Договор с номером {dto.ContractNumber} уже существует.");
 
         if (!Enum.TryParse<FactoringType>(dto.FactoringType, ignoreCase: true, out var parsedType))
             parsedType = FactoringType.WithRecourse;

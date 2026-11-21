@@ -31,22 +31,7 @@ public class RegistriesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<RegistryDto>> Create([FromBody] CreateRegistryDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
             var created = await _registryService.CreateAsync(dto, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return UnprocessableEntity(new { message = ex.Message }); // 422 - нарушение бизнес-правил!
-        }
     }
 }

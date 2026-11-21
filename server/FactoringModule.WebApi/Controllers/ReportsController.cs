@@ -21,13 +21,7 @@ public class ReportsController : ControllerBase
         [FromQuery] Guid clientId,
         CancellationToken cancellationToken)
     {
-        try
-        {
+       
             return Ok(await _analyticsService.GetReconciliationReportAsync(clientId, cancellationToken));
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
     }
 }

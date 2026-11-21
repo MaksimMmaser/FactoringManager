@@ -34,15 +34,9 @@ public class ClientsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ClientDto>> Create([FromBody] CreateClientDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
+      
             var created = await _clientService.CreateAsync(dto, cancellationToken);
             // Возвращаем 201 Created + заголовок Location с путем на GetById
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
     }
 }

@@ -36,18 +36,7 @@ public class ContractsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ContractDto>> Create([FromBody] CreateContractDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
-            var created = await _contractService.CreateAsync(dto, cancellationToken);
+        var created = await _contractService.CreateAsync(dto, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
     }
 }

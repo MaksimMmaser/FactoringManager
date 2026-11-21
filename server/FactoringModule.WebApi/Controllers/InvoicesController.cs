@@ -27,18 +27,7 @@ public class InvoicesController : ControllerBase
     [HttpPost("{id:guid}/repay")]
     public async Task<ActionResult<InvoiceDto>> Repay(Guid id, CancellationToken cancellationToken)
     {
-        try
-        {
             var repaid = await _invoiceService.RepayAsync(id, cancellationToken);
             return Ok(repaid);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return UnprocessableEntity(new { message = ex.Message });
-        }
     }
 }

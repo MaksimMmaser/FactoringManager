@@ -3,6 +3,7 @@ using FactoringModule.Application.Interfaces;
 using FactoringModule.Domain.Entities;
 using FactoringModule.Domain.Enums;
 using FactoringModule.Infrastructure.Persistence;
+using FactoringModule.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace FactoringModule.Infrastructure.Services;
@@ -63,7 +64,7 @@ public class ClientService : IClientService
             .AnyAsync(c => c.Unp == dto.Unp, cancellationToken);
 
         if (unpExists)
-            throw new InvalidOperationException($"Клиент с УНП {dto.Unp} уже зарегистрирован в системе.");
+            throw new ConflictException($"Клиент с УНП {dto.Unp} уже зарегистрирован в системе.");
 
         if (!Enum.TryParse<ClientRating>(dto.Rating, ignoreCase: true, out var parsedRating))
             parsedRating = ClientRating.A;
