@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { AuthModal } from './components/AuthModal';
@@ -10,184 +11,143 @@ import { ClientsPage } from './pages/ClientsPage';
 import { DebtorsPage } from './pages/DebtorsPage';
 import {AnalyticsPage} from './pages/AnalyticsPage';
 import ReportsPage from './pages/ReportsPage';
-import type { 
-  FactoringContract, 
-  FactoringRegistry, 
-  ClientItem, 
-  DebtorItem 
+import { factoringApi, API_BASE_URL } from './api/factoringApi';
+import type { DashboardResponse } from './api/factoringApi';
+import type {
+  FactoringContract,
+  FactoringRegistry,
+  ClientItem,
+  DebtorItem,
 } from './types/dashboard';
 
 export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // Пользователь банковской системы
   const [currentUser, setCurrentUser] = useState({
     name: 'Козема Е. В.',
     role: 'Специалист по факторингу (ЦБУ №406)',
     login: 'officer-406',
   });
 
-  // Свободный лимит ЦБУ (начинаем с 41 100 BYN)
-  const [availableLimit, setAvailableLimit] = useState(41100);
+  // Состояния загрузки
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  // 1. БАЗА ДОГОВОРОВ
-  const [contracts, setContracts] = useState<FactoringContract[]>([
-    {
-      id: '1',
-      contractNumber: 'ФАКТ-2026/406',
-      clientName: 'ОАО «Кузлитмаш»',
-      advanceRate: 0.80,
-      factoringType: 'WithRecourse',
-      createdAt: '15.01.2026',
-      status: 'Active',
-    },
-    {
-      id: '2',
-      contractNumber: 'ФАКТ-2026/407',
-      clientName: 'ОАО «Полесье»',
-      advanceRate: 0.85,
-      factoringType: 'WithoutRecourse',
-      createdAt: '20.02.2026',
-      status: 'Active',
+  // Живые данные из базы PostgreSQL
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [contracts, setContracts] = useState<FactoringContract[]>([]);
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [debtors, setDebtors] = useState<DebtorItem[]>([]);
+  const [registries, setRegistries] = useState<FactoringRegistry[]>([]);
+
+  // Загрузка всех разделов параллельно
+  const loadAllData = useCallback(async () => {
+    setIsLoading(true);
+    setApiError(null);
+    try {
+      const [dashRes, clientsRes, debtorsRes, contractsRes, registriesRes] =
+        await Promise.all([
+          factoringApi.getDashboard(),
+          factoringApi.getClients(),
+          factoringApi.getDebtors(),
+          factoringApi.getContracts(),
+          factoringApi.getRegistries(),
+        ]);
+
+      setDashboard(dashRes);
+      setClients(clientsRes);
+      setDebtors(debtorsRes);
+      setContracts(contractsRes);
+      setRegistries(registriesRes);
+    } catch (err) {
+      setApiError(
+        err instanceof Error
+          ? err.message
+          : 'Не удалось подключиться к серверу факторинга.'
+      );
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  }, []);
 
-  // 2. БАЗА КЛИЕНТОВ (ПОСТАВЩИКОВ)
-  const [clients, setClients] = useState<ClientItem[]>([
-    {
-      id: '1',
-      name: 'ОАО «Кузлитмаш»',
-      unp: '200024151',
-      iban: 'BY88BLBB30120000241510001001',
-      factoringLimit: 55000,
-      usedLimit: 13900,
-      rating: 'A',
-      activeContractsCount: 1,
-    },
-    {
-      id: '2',
-      name: 'ОАО «Полесье» (Трикотаж)',
-      unp: '200000456',
-      iban: 'BY44BLBB30120000004560001002',
-      factoringLimit: 40000,
-      usedLimit: 12500,
-      rating: 'B',
-      activeContractsCount: 1,
-    },
-    {
-      id: '3',
-      name: 'ОАО «Пинский мясокомбинат»',
-      unp: '200000999',
-      iban: 'BY12BLBB30120000009990001003',
-      factoringLimit: 25000,
-      usedLimit: 1600,
-      rating: 'C',
-      activeContractsCount: 1,
-    }
-  ]);
+  useEffect(() => {
+    void loadAllData();
+  }, [loadAllData]);
 
-  // 3. БАЗА ДЕБИТОРОВ (ПОКУПАТЕЛЕЙ)
-  const [debtors, setDebtors] = useState<DebtorItem[]>([
-    {
-      id: '1',
-      name: 'ЗАО «Холдинговая компания «Пинскдрев»',
-      unp: '200000123',
-      subLimit: 35000,
-      currentDebt: 24000,
-      averagePaymentDays: 42,
-      riskCategory: 'Reliable',
-      overdueDebt: 0,
-    },
-    {
-      id: '2',
-      name: 'ОАО «Полесье» (Сеть магазинов)',
-      unp: '200000456',
-      subLimit: 20000,
-      currentDebt: 12500,
-      averagePaymentDays: 28,
-      riskCategory: 'Reliable',
-      overdueDebt: 0,
-    },
-    {
-      id: '3',
-      name: 'ОАО «Кузлитмаш» (Снабжение)',
-      unp: '200024151',
-      subLimit: 15000,
-      currentDebt: 8200,
-      averagePaymentDays: 55,
-      riskCategory: 'UnderControl',
-      overdueDebt: 0,
-    },
-    {
-      id: '4',
-      name: 'ОАО «Пинский мясокомбинат» (Торговый дом)',
-      unp: '200000999',
-      subLimit: 10000,
-      currentDebt: 1600,
-      averagePaymentDays: 78,
-      riskCategory: 'StopList',
-      overdueDebt: 1600,
-    }
-  ]);
-
-  // 4. БАЗА РЕЕСТРОВ ОПЕРАЦИЙ
-  const [registries, setRegistries] = useState<FactoringRegistry[]>([
-    {
-      id: '1',
-      registryNumber: 'РЕЕСТР-406/01',
-      contractNumber: 'ФАКТ-2026/406',
-      clientName: 'ОАО «Кузлитмаш»',
-      createdAt: '12.11.2026',
-      totalAmount: 30000,
-      advanceAmount: 24000,
-      commissionAmount: 750,
-      status: 'Financed',
-      invoices: [],
-    },
-    {
-      id: '2',
-      registryNumber: 'РЕЕСТР-406/02',
-      contractNumber: 'ФАКТ-2026/407',
-      clientName: 'ОАО «Полесье»',
-      createdAt: '10.11.2026',
-      totalAmount: 15000,
-      advanceAmount: 12750,
-      commissionAmount: 375,
-      status: 'Financed',
-      invoices: [],
-    }
-  ]);
-
-  const handleAddContract = (newContract: FactoringContract) => {
-    setContracts(prev => [newContract, ...prev]);
+  // Обработчики реальных сохранений в PostgreSQL:
+ const handleAddContract = async (newContractData: any) => {
+    // Убрали try-catch и alert, чтобы ошибка пролетела в форму!
+    await factoringApi.createContract({
+      contractNumber: newContractData.contractNumber,
+      clientId: newContractData.clientId,
+      factoringType: newContractData.factoringType,
+      advanceRate: newContractData.advanceRate,
+    });
+    await loadAllData();
   };
 
-  const handleAddClient = (newClient: ClientItem) => {
-    setClients(prev => [newClient, ...prev]);
+  const handleAddClient = async (newClientData: any) => {
+    // Убираем alert(), чтобы ошибка долетела до try-catch модалки!
+    await factoringApi.createClient({
+      name: newClientData.name,
+      unp: newClientData.unp,
+      iban: newClientData.iban,
+      factoringLimit: newClientData.factoringLimit,
+      rating: newClientData.rating,
+    });
+    await loadAllData();
   };
 
-  const handleAddDebtor = (newDebtor: DebtorItem) => {
-    setDebtors(prev => [newDebtor, ...prev]);
+  const handleAddDebtor = async (newDebtorData: any) => {
+    try {
+      await factoringApi.createDebtor({
+        name: newDebtorData.name,
+        unp: newDebtorData.unp,
+        subLimit: newDebtorData.subLimit,
+        averagePaymentDays: newDebtorData.averagePaymentDays,
+        riskCategory: newDebtorData.riskCategory,
+      });
+      await loadAllData();
+    } catch (err: any) {
+      alert(err.message || 'Ошибка регистрации дебитора');
+    }
   };
 
-  const handleAddRegistry = (newRegistry: FactoringRegistry) => {
-    setRegistries(prev => [newRegistry, ...prev]);
-    setAvailableLimit(prev => Math.max(0, prev - newRegistry.advanceAmount));
+  const handleAddRegistry = async (newRegistryData: any) => {
+    // Убрали alert(), пробрасываем ошибку в модалку!
+    await factoringApi.createRegistry({
+      contractId: newRegistryData.contractId,
+      invoices: newRegistryData.invoices.map((inv: any) => ({
+        number: inv.number,
+        debtorId: inv.debtorId,
+        issueDate: new Date().toISOString(),
+        dueDate: new Date(inv.dueDate || Date.now() + 30 * 86400000).toISOString(),
+        amount: Number(inv.amount),
+      })),
+    });
+    await loadAllData();
+  };
+
+  const handleRepayInvoice = async (invoiceId: string) => {
+    try {
+      await factoringApi.repayInvoice(invoiceId);
+      await loadAllData();
+    } catch (err: any) {
+      alert(err.message || 'Ошибка погашения');
+    }
   };
 
   return (
     <BrowserRouter>
       <div className="flex min-h-screen bg-slate-50 overflow-x-hidden">
-        {/* Боковое меню без настроек */}
-        <Sidebar 
-          isOpen={isMobileMenuOpen} 
-          onClose={() => setIsMobileMenuOpen(false)} 
+        <Sidebar
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
         />
 
         <div className="flex-1 flex flex-col min-w-0 w-full">
-          {/* Шапка со сквозным поиском и профилем входа */}
-          <Header 
+          <Header
             onToggleMenu={() => setIsMobileMenuOpen(true)}
             clients={clients}
             contracts={contracts}
@@ -197,73 +157,117 @@ export default function App() {
           />
 
           <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-            <Routes>
-              <Route 
-                path="/" 
-                element={
-                  <DashboardPage 
-                    availableLimit={availableLimit}
-                    onAddContract={handleAddContract} 
-                    onAddRegistry={handleAddRegistry}
-                  />
-                } 
-              />
-              <Route 
-                path="/contracts" 
-                element={
-                  <ContractsPage 
-                    contracts={contracts} 
-                    onAddContract={handleAddContract} 
-                  />
-                } 
-              />
-              <Route 
-                path="/clients" 
-                element={
-                  <ClientsPage 
-                    clients={clients} 
-                    onAddClient={handleAddClient} 
-                  />
-                } 
-              />
-              <Route 
-                path="/debtors" 
-                element={
-                  <DebtorsPage 
-                    debtors={debtors} 
-                    onAddDebtor={handleAddDebtor} 
-                  />
-                } 
-              />
-              <Route 
-                path="/operations" 
-                element={
-                  <OperationsPage 
-                    registries={registries}
-                    availableLimit={availableLimit}
-                    onAddRegistry={handleAddRegistry}
-                  />
-                } 
-              />
-              <Route 
-                path="/analytics" 
-                element={
-                  <AnalyticsPage 
-                    debtors={debtors} 
-                    registries={registries} 
-                  />
-                } 
-              />
-              <Route 
-                path="/reports" 
-                element={<ReportsPage />} 
-              />
-            </Routes>
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-24 space-y-3">
+                <Loader2 className="w-8 h-8 animate-spin text-bank-600" />
+                <p className="text-sm font-semibold text-slate-600">
+                  Загрузка данных из PostgreSQL ({API_BASE_URL})...
+                </p>
+              </div>
+            ) : apiError || !dashboard ? (
+              <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center shadow-sm max-w-md mx-auto my-12 space-y-4">
+                <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    Сервер API недоступен
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">{apiError}</p>
+                  <p className="text-[11px] text-slate-400 font-mono mt-2">
+                    Адрес: {API_BASE_URL}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadAllData()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-bank-600 hover:bg-bank-700 text-white rounded-xl text-xs font-bold transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Повторить подключение
+                </button>
+              </div>
+            ) : (
+              <Routes>
+                <Route
+                  path="/"
+                  element={
+                    <DashboardPage
+                      dashboard={dashboard}
+                      clients={clients}
+                      contracts={contracts}
+                      debtors={debtors}
+                      onAddContract={handleAddContract}
+                      onAddRegistry={handleAddRegistry}
+                      onRepayInvoice={handleRepayInvoice}
+                    />
+                  }
+                />
+                <Route
+                  path="/contracts"
+                  element={
+                    <ContractsPage
+                      contracts={contracts}
+                      clients={clients} // 👈 Передаем реальных клиентов!
+                      onAddContract={handleAddContract}
+                    />
+                  }
+                />
+                <Route
+                  path="/operations"
+                  element={
+                    <OperationsPage
+                      registries={registries}
+                      contracts={contracts} // 👈 Передаем реальные договоры!
+                      debtors={debtors}     // 👈 Передаем реальных дебиторов!
+                      availableLimit={dashboard.metrics.availableLimit}
+                      onAddRegistry={handleAddRegistry}
+                    />
+                  }
+                />
+                <Route
+                  path="/clients"
+                  element={
+                    <ClientsPage
+                      clients={clients}
+                      onAddClient={handleAddClient}
+                    />
+                  }
+                />
+                <Route
+                  path="/debtors"
+                  element={
+                    <DebtorsPage
+                      debtors={debtors}
+                      onAddDebtor={handleAddDebtor}
+                    />
+                  }
+                />
+               <Route
+                  path="/operations"
+                  element={
+                    <OperationsPage
+                      registries={registries}
+                      contracts={contracts}
+                      debtors={debtors}    
+                      availableLimit={dashboard.metrics.availableLimit}
+                      onAddRegistry={handleAddRegistry}
+                    />
+                  }
+                />
+                <Route
+                  path="/analytics"
+                  element={
+                    <AnalyticsPage debtors={debtors} registries={registries} />
+                  }
+                />
+               <Route path="/reports" element={<ReportsPage clients={clients} />} />
+              </Routes>
+            )}
           </main>
         </div>
 
-        {/* Модалка входа в админку / смены роли */}
-        <AuthModal 
+        <AuthModal
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
           currentRole={currentUser.role}

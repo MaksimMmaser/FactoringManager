@@ -17,23 +17,5 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: factoring_api
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "5213:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      AUTO_MIGRATE: "true"
-      ENABLE_OPENAPI: "true"
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
-
 volumes:
   factoring_pg_data:

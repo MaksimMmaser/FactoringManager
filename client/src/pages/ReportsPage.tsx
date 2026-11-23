@@ -376,7 +376,13 @@ const BankDatePicker: React.FC<BankDatePickerProps> = ({ label, value, onChange 
 // ==========================================
 // ГЛАВНЫЙ ЭКРАН ОТЧЕТОВ
 // ==========================================
-export default function FactoringReportsView() {
+interface ReportsPageProps {
+  clients?: ClientItem[];
+}
+
+export default function FactoringReportsView({ clients = [] }: ReportsPageProps) {
+  // Если передан список клиентов из БД — берем его, иначе используем резервный MOCK_CLIENTS
+  const availableClients = clients.length > 0 ? clients : MOCK_CLIENTS;
   const [reportType, setReportType] = useState<ReportType>('RECONCILIATION');
   const [period, setPeriod] = useState<PeriodType>('MONTH');
   const [customDateFrom, setCustomDateFrom] = useState('2026-11-01');
@@ -414,7 +420,7 @@ export default function FactoringReportsView() {
   }, [toastMessage]);
 
   const filteredClients = useMemo(() => {
-    return MOCK_CLIENTS.filter(
+    return availableClients.filter(
       (c) =>
         c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
         c.unp.includes(clientSearch)
@@ -422,7 +428,7 @@ export default function FactoringReportsView() {
   }, [clientSearch]);
 
   const activeClient = useMemo(
-    () => MOCK_CLIENTS.find((c) => c.id === appliedParams.clientId) || MOCK_CLIENTS[0],
+    () => availableClients.find((c) => c.id === appliedParams.clientId) || MOCK_CLIENTS[0],
     [appliedParams.clientId]
   );
 
@@ -706,10 +712,10 @@ export default function FactoringReportsView() {
             >
               <div className="truncate pr-2">
                 <span className="font-semibold text-slate-900 block truncate text-xs sm:text-sm">
-                  {MOCK_CLIENTS.find((c) => c.id === selectedClientId)?.name}
+                  {availableClients.find((c) => c.id === selectedClientId)?.name}
                 </span>
                 <span className="text-xs text-slate-500 font-mono block">
-                  УНП: {MOCK_CLIENTS.find((c) => c.id === selectedClientId)?.unp}
+                  УНП: {availableClients.find((c) => c.id === selectedClientId)?.unp}
                 </span>
               </div>
               <ChevronDown

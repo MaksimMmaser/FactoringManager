@@ -1,98 +1,136 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Modal } from './Modal';
-import { 
-  Plus, Trash2, AlertTriangle, Calculator, 
-  CheckCircle2, ChevronDown, Check, Building2, FileText 
+import {
+  Plus, Trash2, AlertTriangle, Calculator,
+  CheckCircle2, ChevronDown, Check, Building2, FileText, Loader2, AlertCircle
 } from 'lucide-react';
-import type { FactoringRegistry, InvoiceItem } from '../types/dashboard';
+import type { FactoringContract, DebtorItem } from '../types/dashboard';
 
 interface UploadRegistryModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableLimit: number;
-  onSuccess: (newRegistry: FactoringRegistry) => void;
+  contracts: FactoringContract[];
+  debtors: DebtorItem[];
+  onSuccess: (registryData: any) => Promise<void> | void;
 }
 
-interface ContractOption {
+interface InvoiceFormRow {
+  id: string;
   number: string;
-  client: string;
-  limit: string;
+  debtorId: string;
+  amount: number;
+  dueDate: string;
 }
 
-const CONTRACT_OPTIONS: ContractOption[] = [
-  { number: 'ФАКТ-2026/406', client: 'ОАО «Кузлитмаш»', limit: '55 000 BYN' },
-  { number: 'ФАКТ-2026/407', client: 'ОАО «Полесье»', limit: '40 000 BYN' },
-];
+// Ставка аванса по умолчанию, если у договора нет корректной ставки
+const DEFAULT_ADVANCE_RATE = 0.8;
+const COMMISSION_RATE = 0.025;
 
-const DEBTOR_OPTIONS = [
-  'ЗАО «ХК «Пинскдрев»',
-  'ОАО «Полесье»',
-  'ОАО «Кузлитмаш»',
-  'ОАО «Пинский мясокомбинат»',
-];
+const getDefaultDueDate = () =>
+  new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+
+// Новая строка накладной. Номер ТТН уникальный, чтобы сервер не отклонял дубликаты
+const createInvoiceRow = (debtorId: string, amount: number): InvoiceFormRow => ({
+  id: crypto.randomUUID(),
+  number: `ТТН-${Date.now().toString().slice(-7)}`,
+  debtorId,
+  amount,
+  dueDate: getDefaultDueDate(),
+});
+
+// Дебитор по умолчанию: первый, которого нет в стоп-листе
+const pickDefaultDebtor = (debtors: DebtorItem[]): DebtorItem | undefined =>
+  debtors.find(d => d.riskCategory !== 'StopList') ?? debtors[0];
 
 export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
   isOpen,
   onClose,
   availableLimit,
+  contracts,
+  debtors,
   onSuccess,
 }) => {
-  const advanceRate = 0.80; // 80%
-  const commissionRate = 0.025; // 2.5%
-
-  // Кастомный выбор договора
-  const [selectedContract, setSelectedContract] = useState<ContractOption>(CONTRACT_OPTIONS[0]);
+  const [selectedContractId, setSelectedContractId] = useState<string>('');
   const [isContractDropdownOpen, setIsContractDropdownOpen] = useState(false);
   const contractDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Накладные
-  const [invoices, setInvoices] = useState<InvoiceItem[]>([
-    {
-      id: '1',
-      number: 'ТТН-009811',
-      debtorName: 'ЗАО «ХК «Пинскдрев»',
-      amount: 15000,
-      dueDate: '2026-12-25',
-    },
-    {
-      id: '2',
-      number: 'ТТН-009812',
-      debtorName: 'ОАО «Полесье»',
-      amount: 10000,
-      dueDate: '2026-12-30',
-    },
-  ]);
-
-  // Дропдаун дебитора для конкретной строки накладной
+  const [invoices, setInvoices] = useState<InvoiceFormRow[]>([]);
   const [activeDebtorRowId, setActiveDebtorRowId] = useState<string | null>(null);
+  // Ссылка на обертку той строки, у которой сейчас открыт список дебиторов
+  const debtorDropdownRef = useRef<HTMLDivElement>(null);
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Закрыли окно: очищаем форму. Открыли: убираем старую ошибку
+  useEffect(() => {
+    if (!isOpen) {
+      setInvoices([]);
+      setSelectedContractId('');
+      setActiveDebtorRowId(null);
+      setIsContractDropdownOpen(false);
+    }
+    setErrorMessage(null);
+  }, [isOpen]);
+
+  // Договор: выбираем первый, только если ничего не выбрано (или выбранного уже нет в списке)
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedContractId(prev =>
+      prev && contracts.some(c => c.id.toLowerCase() === prev.toLowerCase())
+        ? prev
+        : (contracts[0]?.id ?? '')
+    );
+  }, [isOpen, contracts]);
+
+  // Накладные: создаем первую строку, только если список пуст (выбор пользователя не затирается)
+  useEffect(() => {
+    if (!isOpen) return;
+    const debtor = pickDefaultDebtor(debtors);
+    if (!debtor) return;
+    setInvoices(prev => (prev.length > 0 ? prev : [createInvoiceRow(debtor.id, 5000)]));
+  }, [isOpen, debtors]);
+
+  // Закрытие выпадающих списков по клику вне их области
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (contractDropdownRef.current && !contractDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+
+      if (contractDropdownRef.current && !contractDropdownRef.current.contains(target)) {
         setIsContractDropdownOpen(false);
       }
-      setActiveDebtorRowId(null);
+
+      // Список дебиторов закрываем, только если клик был ВНЕ открытой строки
+      if (debtorDropdownRef.current && !debtorDropdownRef.current.contains(target)) {
+        setActiveDebtorRowId(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Расчеты на лету
+  // Безопасный поиск договора (без учета регистра)
+  const selectedContract =
+    contracts.find(c => c.id.toLowerCase() === selectedContractId?.toLowerCase()) || contracts[0];
+
+  // Ставка аванса берется из выбранного договора
+  const contractRate = selectedContract?.advanceRate;
+  const advanceRate =
+    contractRate != null && contractRate > 0 && contractRate <= 1
+      ? contractRate
+      : DEFAULT_ADVANCE_RATE;
+
   const totalAmount = invoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
   const advanceAmount = totalAmount * advanceRate;
-  const commissionAmount = totalAmount * commissionRate;
+  const commissionAmount = totalAmount * COMMISSION_RATE;
   const holdbackAmount = totalAmount - advanceAmount;
   const isLimitExceeded = advanceAmount > availableLimit;
 
   const handleAddInvoice = () => {
-    const newInvoice: InvoiceItem = {
-      id: crypto.randomUUID(),
-      number: `ТТН-0098${invoices.length + 13}`,
-      debtorName: 'ЗАО «ХК «Пинскдрев»',
-      amount: 5000,
-      dueDate: '2026-12-31',
-    };
-    setInvoices(prev => [...prev, newInvoice]);
+    const debtor = pickDefaultDebtor(debtors);
+    if (!debtor) return;
+    setInvoices(prev => [...prev, createInvoiceRow(debtor.id, 3000)]);
   };
 
   const handleRemoveInvoice = (id: string) => {
@@ -100,29 +138,38 @@ export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
     setInvoices(prev => prev.filter(inv => inv.id !== id));
   };
 
-  const handleUpdateInvoice = (id: string, field: keyof InvoiceItem, value: any) => {
-    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, [field]: value } : inv));
+  const handleUpdateInvoice = (id: string, field: keyof InvoiceFormRow, value: any) => {
+    setInvoices(prev => prev.map(inv => (inv.id === id ? { ...inv, [field]: value } : inv)));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLimitExceeded || totalAmount <= 0) return;
+    setErrorMessage(null);
 
-    const newRegistry: FactoringRegistry = {
-      id: crypto.randomUUID(),
-      registryNumber: `РЕЕСТР-406/${Math.floor(100 + Math.random() * 900)}`,
-      contractNumber: selectedContract.number,
-      clientName: selectedContract.client,
-      createdAt: new Date().toLocaleDateString('ru-RU'),
-      totalAmount,
-      advanceAmount,
-      commissionAmount,
-      status: 'Financed',
-      invoices,
-    };
+    if (isLimitExceeded || totalAmount <= 0 || !selectedContract) {
+      setErrorMessage('Проверьте лимиты и корректность сумм в накладных.');
+      return;
+    }
 
-    onSuccess(newRegistry);
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await onSuccess({
+        contractId: selectedContract.id,
+        invoices: invoices.map(i => ({
+          number: i.number.trim(),
+          debtorId: i.debtorId,
+          amount: Number(i.amount),
+          dueDate: i.dueDate,
+        })),
+      });
+
+      setIsSubmitting(false);
+      onClose();
+    } catch (err: any) {
+      console.error('Ошибка проведения реестра:', err);
+      setIsSubmitting(false);
+      setErrorMessage(err.message || 'Ошибка проведения реестра на сервере.');
+    }
   };
 
   const formatMoney = (val: number) =>
@@ -131,24 +178,35 @@ export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Передача реестра денежных требований (ТТН)">
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* 🎯 1. КАСТОМНЫЙ ДРОПДАУН ВЫБОРА ДОГОВОРА */}
+        {errorMessage && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 font-semibold animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <strong className="block font-bold">Отказ банковского шлюза:</strong>
+              {errorMessage}
+            </div>
+          </div>
+        )}
+
+        {/* Выбор договора */}
         <div className="relative" ref={contractDropdownRef}>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
             Генеральный договор факторинга
           </label>
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={() => setIsContractDropdownOpen(!isContractDropdownOpen)}
-            className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl text-left transition-all focus:outline-none focus:ring-2 focus:ring-bank-500/20 focus:border-bank-500"
+            className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl text-left transition-all focus:outline-none focus:ring-2 focus:ring-bank-500/25 min-h-[44px] disabled:opacity-50"
           >
             <div className="flex items-center gap-2.5 truncate">
               <FileText className="w-4 h-4 text-bank-600 shrink-0" />
               <div className="truncate">
-                <span className="font-bold text-slate-900 text-xs sm:text-sm block">
-                  {selectedContract.number} • {selectedContract.client}
+                <span className="font-bold text-slate-900 text-xs sm:text-sm block truncate">
+                  {selectedContract ? `${selectedContract.contractNumber} • ${selectedContract.clientName}` : 'Нет доступных договоров'}
                 </span>
                 <span className="text-[10px] text-slate-400 font-medium block">
-                  Лимит договора: {selectedContract.limit}
+                  Статус: {selectedContract?.status || '—'}
                 </span>
               </div>
             </div>
@@ -156,34 +214,38 @@ export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
           </button>
 
           {isContractDropdownOpen && (
-            <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-1.5 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
-              {CONTRACT_OPTIONS.map((c) => {
-                const isSelected = selectedContract.number === c.number;
-                return (
-                  <button
-                    key={c.number}
-                    type="button"
-                    onClick={() => {
-                      setSelectedContract(c);
-                      setIsContractDropdownOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-xs transition-colors ${
-                      isSelected ? 'bg-bank-50 text-bank-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <span className="block font-bold text-slate-800">{c.number} — {c.client}</span>
-                      <span className="text-[10px] text-slate-400">Лимит финансирования: {c.limit}</span>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-bank-600 shrink-0" />}
-                  </button>
-                );
-              })}
+            <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-1.5 space-y-1 animate-in fade-in max-h-56 overflow-y-auto">
+              {contracts.length === 0 ? (
+                <div className="p-3 text-center text-xs text-slate-400">Сначала создайте договор на вкладке «Реестр договоров»</div>
+              ) : (
+                contracts.map((c) => {
+                  const isSelected = selectedContract?.id.toLowerCase() === c.id.toLowerCase();
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedContractId(c.id);
+                        setIsContractDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-xs transition-colors ${
+                        isSelected ? 'bg-bank-50 text-bank-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <span className="block font-bold text-slate-800">{c.contractNumber} — {c.clientName}</span>
+                        <span className="text-[10px] text-slate-400">Ставка аванса: {Math.round(c.advanceRate * 100)}%</span>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-bank-600 shrink-0" />}
+                    </button>
+                  );
+                })
+              )}
             </div>
           )}
         </div>
 
-        {/* 🎯 2. СТИЛЬНЫЙ СПИСОК НАКЛАДНЫХ */}
+        {/* Список накладных */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -191,112 +253,131 @@ export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
             </span>
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={handleAddInvoice}
-              className="flex items-center gap-1.5 text-xs font-bold text-bank-600 hover:text-bank-700 bg-bank-50 hover:bg-bank-100 px-3 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-xs font-bold text-bank-600 hover:text-bank-700 bg-bank-50 hover:bg-bank-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
             >
               <Plus className="w-3.5 h-3.5" /> Добавить ТТН
             </button>
           </div>
 
-          <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-            {invoices.map((inv, idx) => (
-              <div 
-                key={inv.id} 
-                className="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors space-y-2 relative"
-              >
-                {/* Верхняя строка строки: Номер + Удалить */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="text-[10px] font-bold text-slate-400 font-mono">#{idx + 1}</span>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Номер ТТН"
-                      value={inv.number}
-                      onChange={(e) => handleUpdateInvoice(inv.id, 'number', e.target.value)}
-                      className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold font-mono text-slate-800 focus:outline-none focus:border-bank-500 w-32"
-                    />
-                  </div>
+          <div className="space-y-2.5">
+            {invoices.map((inv, idx) => {
+              // Безопасный поиск дебитора (без учета регистра)
+              const currentDebtor = debtors.find(d => d.id.toLowerCase() === inv.debtorId?.toLowerCase());
+              return (
+                <div
+                  key={inv.id}
+                  className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 hover:border-slate-300 transition-colors space-y-2.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="text-[10px] font-bold text-slate-400 font-mono">#{idx + 1}</span>
+                      <input
+                        type="text"
+                        required
+                        disabled={isSubmitting}
+                        placeholder="Номер ТТН"
+                        value={inv.number}
+                        onChange={(e) => handleUpdateInvoice(inv.id, 'number', e.target.value)}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-slate-800 focus:outline-none focus:border-bank-500 w-32 disabled:opacity-50"
+                      />
+                    </div>
 
-                  {/* Сумма накладной */}
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
+                    <div className="flex items-center gap-1.5">
                       <input
                         type="number"
                         min="100"
                         step="100"
                         required
+                        disabled={isSubmitting}
                         placeholder="Сумма"
                         value={inv.amount}
                         onChange={(e) => handleUpdateInvoice(inv.id, 'amount', Number(e.target.value))}
-                        className="w-28 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-black font-mono text-right text-slate-900 focus:outline-none focus:border-bank-500"
+                        className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-black font-mono text-right text-slate-900 focus:outline-none focus:border-bank-500 disabled:opacity-50"
                       />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400">BYN</span>
+                      <span className="text-[11px] font-bold text-slate-500">BYN</span>
 
+                      <button
+                        type="button"
+                        disabled={invoices.length === 1 || isSubmitting}
+                        onClick={() => handleRemoveInvoice(inv.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-20 transition-colors ml-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Выбор дебитора: ref вешаем только на обертку открытой строки */}
+                  <div
+                    className="relative"
+                    ref={activeDebtorRowId === inv.id ? debtorDropdownRef : null}
+                  >
                     <button
                       type="button"
-                      disabled={invoices.length === 1}
-                      onClick={() => handleRemoveInvoice(inv.id)}
-                      className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-20 transition-colors"
-                      title="Удалить строку"
+                      disabled={isSubmitting}
+                      onClick={() =>
+                        setActiveDebtorRowId(activeDebtorRowId === inv.id ? null : inv.id)
+                      }
+                      className="w-full flex items-center justify-between px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 min-h-[38px]"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+                        <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="font-semibold text-slate-800 truncate">
+                          {currentDebtor ? currentDebtor.name : 'Выберите дебитора'}
+                        </span>
+                        {currentDebtor?.riskCategory === 'StopList' && (
+                          <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded shrink-0">
+                            Стоп-лист
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     </button>
+
+                    {activeDebtorRowId === inv.id && (
+                      <div
+                        className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 p-1 space-y-0.5 animate-in fade-in duration-100 max-h-48 overflow-y-auto"
+                      >
+                        {debtors.map((deb) => {
+                          const isSelected = inv.debtorId?.toLowerCase() === deb.id.toLowerCase();
+                          return (
+                            <button
+                              key={deb.id}
+                              type="button"
+                              onClick={() => {
+                                handleUpdateInvoice(inv.id, 'debtorId', deb.id);
+                                setActiveDebtorRowId(null);
+                              }}
+                              className={`w-full text-left p-2.5 rounded-xl text-xs flex items-center justify-between ${
+                                isSelected ? 'bg-bank-50 text-bank-800 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <div className="truncate pr-2">
+                                <span className="font-medium">{deb.name}</span>
+                                {deb.riskCategory === 'StopList' && (
+                                  <span className="ml-1.5 text-[9px] text-rose-600 font-bold">● Стоп-лист</span>
+                                )}
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-bank-600 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                {/* 🎯 КАСТОМНЫЙ ВЫБОР ДЕБИТОРА В СТРОКЕ (ВМЕСТО SELECT) */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveDebtorRowId(activeDebtorRowId === inv.id ? null : inv.id);
-                    }}
-                    className="w-full flex items-center justify-between px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-left text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="font-medium truncate">{inv.debtorName}</span>
-                    </div>
-                    <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
-                  </button>
-
-                  {activeDebtorRowId === inv.id && (
-                    <div 
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-20 p-1 space-y-0.5 animate-in fade-in duration-100"
-                    >
-                      {DEBTOR_OPTIONS.map((deb) => (
-                        <button
-                          key={deb}
-                          type="button"
-                          onClick={() => {
-                            handleUpdateInvoice(inv.id, 'debtorName', deb);
-                            setActiveDebtorRowId(null);
-                          }}
-                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between ${
-                            inv.debtorName === deb ? 'bg-bank-50 text-bank-800 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          <span>{deb}</span>
-                          {inv.debtorName === deb && <Check className="w-3 h-3 text-bank-600" />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* 🎯 3. СВЕТЛЫЙ КОРПОРАТИВНЫЙ БАНКОВСКИЙ КАЛЬКУЛЯТОР (НИКАКИХ ТЕМНЫХ ПЯТЕН!) */}
+        {/* Калькулятор */}
         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider pb-2 border-b border-slate-200">
             <Calculator className="w-4 h-4 text-bank-600" />
-            Расчет выплаты филиала ЦБУ №406
+            Расчет аванса филиала ЦБУ №406
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
@@ -304,17 +385,18 @@ export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
               <span className="text-slate-400 block text-[11px] font-medium">Сумма требований:</span>
               <span className="text-sm font-bold text-slate-900 font-mono">{formatMoney(totalAmount)}</span>
             </div>
-
             <div className="text-right">
-              <span className="text-slate-400 block text-[11px] font-medium">Аванс к выдаче (80%):</span>
+              <span className="text-slate-400 block text-[11px] font-medium">
+                Аванс к выдаче ({Math.round(advanceRate * 100)}%):
+              </span>
               <span className="text-base font-black text-bank-600 font-mono">{formatMoney(advanceAmount)}</span>
             </div>
-
             <div>
-              <span className="text-slate-400 block text-[11px] font-medium">Дисконт банка (2.5%):</span>
+              <span className="text-slate-400 block text-[11px] font-medium">
+                Дисконт банка ({(COMMISSION_RATE * 100).toFixed(1)}%):
+              </span>
               <span className="font-semibold text-slate-700 font-mono">{formatMoney(commissionAmount)}</span>
             </div>
-
             <div className="text-right">
               <span className="text-slate-400 block text-[11px] font-medium">Гарантийный резерв:</span>
               <span className="font-semibold text-slate-700 font-mono">{formatMoney(holdbackAmount)}</span>
@@ -322,13 +404,12 @@ export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
           </div>
         </div>
 
-        {/* ВАЛИДАЦИЯ ЛИМИТОВ */}
         {isLimitExceeded ? (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 font-medium">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             <div>
-              <strong className="block font-bold">Отказ кредитного контроля: лимит исчерпан!</strong>
-              Требуется {formatMoney(advanceAmount)}, а свободно всего {formatMoney(availableLimit)}.
+              <strong className="block font-bold">Отказ: превышен кредитный лимит!</strong>
+              Требуется аванс {formatMoney(advanceAmount)}, а свободно только {formatMoney(availableLimit)}.
             </div>
           </div>
         ) : (
@@ -338,21 +419,22 @@ export const UploadRegistryModal: React.FC<UploadRegistryModalProps> = ({
           </div>
         )}
 
-        {/* Кнопки */}
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
           >
             Отмена
           </button>
           <button
             type="submit"
-            disabled={isLimitExceeded || totalAmount <= 0}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-bank-600 hover:bg-bank-700 disabled:bg-slate-300 disabled:cursor-not-allowed shadow-md shadow-bank-600/20 transition-all active:scale-95"
+            disabled={isLimitExceeded || totalAmount <= 0 || isSubmitting || !selectedContract}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-bank-600 hover:bg-bank-700 disabled:bg-slate-300 shadow-md shadow-bank-600/20 transition-all active:scale-95"
           >
-            Выплатить аванс поставщику
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>{isSubmitting ? 'Проведение...' : 'Выплатить аванс поставщику'}</span>
           </button>
         </div>
       </form>

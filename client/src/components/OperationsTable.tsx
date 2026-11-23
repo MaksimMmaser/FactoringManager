@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, MoreHorizontal, Check } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import type { RecentOperation, OperationStatus } from '../types/dashboard';
 
 interface OperationsTableProps {
   operations: RecentOperation[];
+  onRepay?: (invoiceId: string) => void; // 👈 Добавили обработчик погашения
 }
 
 type FilterOption = 'ALL' | 'FINANCED' | 'PAID' | 'OVERDUE';
 
-export const OperationsTable: React.FC<OperationsTableProps> = ({ operations }) => {
+export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, onRepay }) =>  {
   // Состояние кастомного выпадающего списка
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<FilterOption>('ALL');
@@ -170,12 +171,22 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations }) 
                   <td className="py-4 px-6 font-semibold text-slate-800">{op.counterparty}</td>
                   <td className="py-4 px-6 text-right font-extrabold text-slate-900 whitespace-nowrap">{formatMoney(op.amount)}</td>
                   <td className="py-4 px-6 text-center">{renderBadge(op.status)}</td>
-                  <td className="py-4 px-6 text-right">
-                    <button className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
-                      <MoreHorizontal className="w-5 h-5" />
+                <td className="py-4 px-6 text-right">
+                  {/* Если накладная еще не оплачена — показываем кнопку "Погасить" */}
+                  {op.status !== 'Paid' && onRepay ? (
+                    <button
+                      type="button"
+                      onClick={() => onRepay(op.id)}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-bank-50 hover:text-bank-700 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                      title="Дебитор перевел деньги в банк"
+                    >
+                      Погасить
                     </button>
-                  </td>
-                </tr>
+                  ) : (
+                    <span className="text-xs text-slate-400 font-mono">—</span>
+                  )}
+                </td>
+              </tr>
               ))
             )}
           </tbody>

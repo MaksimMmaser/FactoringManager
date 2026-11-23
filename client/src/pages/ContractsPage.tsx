@@ -1,16 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { PlusCircle, Search, Filter, Check, ChevronDown, FileText } from 'lucide-react';
 import { CreateContractModal } from '../components/CreateContractModal';
-import type { FactoringContract } from '../types/dashboard';
+import type { FactoringContract, ClientItem } from '../types/dashboard';
 
 interface ContractsPageProps {
   contracts: FactoringContract[];
-  onAddContract: (contract: FactoringContract) => void;
+  clients: ClientItem[]; // 👈 Передаем реальных клиентов для модалки!
+  onAddContract: (contract: any) => void;
 }
 
 type FilterType = 'ALL' | 'WithRecourse' | 'WithoutRecourse';
 
-export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddContract }) => {
+export const ContractsPage: React.FC<ContractsPageProps> = ({ 
+  contracts, 
+  clients,
+  onAddContract 
+}) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<FilterType>('ALL');
@@ -18,7 +23,6 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
 
   const filterRef = useRef<HTMLDivElement>(null);
 
-  // Закрытие меню фильтра при клике вне его
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
@@ -29,7 +33,6 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Фильтрация договоров по поиску и типу
   const filteredContracts = contracts.filter((c) => {
     const matchesSearch = 
       c.contractNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -43,7 +46,7 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* 1. Шапка страницы: на мобилках flex-col, на ПК flex-row */}
+      {/* Шапка */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
@@ -62,9 +65,8 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
         </button>
       </div>
 
-      {/* 2. Панель поиска и фильтров */}
+      {/* Поиск и фильтры */}
       <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
-        {/* Строка поиска */}
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
@@ -76,7 +78,6 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
           />
         </div>
 
-        {/* 🎯 Кастомное выпадающее меню фильтров по типу факторинга */}
         <div className="relative shrink-0" ref={filterRef}>
           <button 
             type="button"
@@ -121,7 +122,7 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
         </div>
       </div>
 
-      {/* 3. Блок отображения данных */}
+      {/* Список договоров */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {filteredContracts.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 font-medium">
@@ -129,11 +130,10 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
           </div>
         ) : (
           <>
-            {/* 📱 МОБИЛЬНЫЙ ВИД: Карточки договоров (< md) БЕЗ СКРОЛЛА */}
+            {/* Мобильный вид */}
             <div className="divide-y divide-slate-100 md:hidden">
               {filteredContracts.map((contract) => (
                 <div key={contract.id} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
-                  {/* Верхняя строка: Номер договора + Бейдж статуса */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg bg-bank-50 flex items-center justify-center text-bank-600">
@@ -144,16 +144,14 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
                       </span>
                     </div>
                     <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
-                      Действует
+                      {contract.status === 'Active' ? 'Действует' : contract.status}
                     </span>
                   </div>
 
-                  {/* Название клиента */}
                   <div className="text-xs font-semibold text-slate-700 pl-9">
                     {contract.clientName}
                   </div>
 
-                  {/* Нижняя плашка параметров: Тип, Аванс, Дата */}
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-[11px]">
                     <div>
                       <span className="text-slate-400 block text-[9px] uppercase font-bold">Вид</span>
@@ -180,7 +178,7 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
               ))}
             </div>
 
-            {/* 💻 ДЕСКТОПНЫЙ ВИД: Полноценная таблица (>= md) */}
+            {/* Десктопная таблица */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50/75 text-[11px] text-slate-400 uppercase font-bold border-b border-slate-100">
@@ -207,7 +205,7 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
                       <td className="py-4 px-6 text-slate-500 text-xs">{contract.createdAt}</td>
                       <td className="py-4 px-6 text-center">
                         <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold">
-                          Действует
+                          {contract.status === 'Active' ? 'Действует' : contract.status}
                         </span>
                       </td>
                     </tr>
@@ -219,16 +217,12 @@ export const ContractsPage: React.FC<ContractsPageProps> = ({ contracts, onAddCo
         )}
       </div>
 
-      {/* Попап создания нового договора */}
+      {/* Модалка с реальными клиентами из БД */}
       <CreateContractModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)}
-        onCreate={(contractData) => {
-          onAddContract({
-            ...contractData,
-            status: 'Active',
-          });
-        }}
+        clients={clients}
+        onCreate={onAddContract}
       />
     </div>
   );

@@ -37,20 +37,22 @@ public class AnalyticsService : IAnalyticsService
             })
             .ToListAsync(cancellationToken);
 
-        // 3. Последние 10 операций по накладным
-        var recentOps = await _context.Invoices
-            .AsNoTracking()
-            .OrderByDescending(i => i.IssueDate)
-            .Take(10)
-            .Select(i => new RecentOperationDto
-            {
-                Id = i.Id,
-                Date = i.IssueDate,
-                Counterparty = i.Debtor.Name,
-                Amount = i.AdvanceAmount,
-                Status = i.Status.ToString()
-            })
-            .ToListAsync(cancellationToken);
+      // 3. Последние 10 операций (берем реальные реестры из PostgreSQL!)
+          // 3. Последние операции (накладные ТТН с указанием цепочки Поставщик ➔ Покупатель)
+           var recentOps = await _context.Invoices
+               .AsNoTracking()
+               .OrderByDescending(i => i.IssueDate)
+               .Take(10)
+               .Select(i => new RecentOperationDto
+               {
+                   Id = i.Id,
+                   Date = i.IssueDate,
+                   // 🎯 Пишем понятно: кто отгрузил ➔ кому отгрузил
+                   Counterparty = i.Registry.Contract.Client.Name + " ➔ " + i.Debtor.Name,
+                   Amount = i.AdvanceAmount,
+                   Status = i.Status.ToString()
+               })
+               .ToListAsync(cancellationToken);
 
         // 4. Динамика портфеля по месяцам: сначала группировка в SQL, потом названия в C#!
         var monthlyRaw = await _context.Registries

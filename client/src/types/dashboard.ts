@@ -30,10 +30,10 @@ export interface FactoringContract {
   id: string;
   contractNumber: string;
   clientName: string;
-  advanceRate: number;      // например, 0.8 (80%)
+  advanceRate: number;
   factoringType: 'WithRecourse' | 'WithoutRecourse';
   createdAt: string;
-  status: 'Active' | 'UnderReview' | 'Closed';
+  status: 'Active' | 'Suspended' | 'Closed'; // 👈 ТЕПЕРЬ ПОЛНОЕ СОВПАДЕНИЕ С C#
 }
 // Отдельная товарно-транспортная накладная (ТТН) внутри реестра
 export interface InvoiceItem {

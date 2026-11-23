@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { Building, ShieldCheck, AlertCircle, Check } from 'lucide-react';
+import { Building, ShieldCheck, AlertCircle, Check, Loader2 } from 'lucide-react';
 import type { ClientItem } from '../types/dashboard';
 
 interface CreateClientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddClient: (newClient: ClientItem) => void;
+  onAddClient: (clientData: any) => Promise<void> | void; // Поддерживаем асинхронный сабмит
 }
 
 export const CreateClientModal: React.FC<CreateClientModalProps> = ({
@@ -16,56 +16,69 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [unp, setUnp] = useState('');
-  const [iban, setIban] = useState('BY88BLBB3012');
+  const [iban, setIban] = useState('BY88BLBB30120000241510001001');
   const [limit, setLimit] = useState(50000);
   const [rating, setRating] = useState<'A' | 'B' | 'C'>('A');
-  const [error, setError] = useState<string | null>(null);
+  
+  // 🎯 Промышленная обработка ошибок и загрузки прямо в форме
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Валидация УНП: строго только цифры, максимум 9 знаков
   const handleUnpChange = (val: string) => {
     const digitsOnly = val.replace(/\D/g, '');
     if (digitsOnly.length <= 9) {
       setUnp(digitsOnly);
-      setError(null);
+      setErrorMessage(null);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
 
     if (unp.length !== 9) {
-      setError('УНП юридического лица в РБ должен содержать ровно 9 цифр!');
+      setErrorMessage('УНП юридического лица в РБ должен содержать ровно 9 цифр!');
       return;
     }
 
-    const newClient: ClientItem = {
-      id: crypto.randomUUID(),
-      name,
-      unp,
-      iban,
-      factoringLimit: Number(limit),
-      usedLimit: 0,
-      rating,
-      activeContractsCount: 1,
-    };
+    setIsSubmitting(true);
+    try {
+      // Отправляем данные на бэкенд. Если сервер вернет ошибку (400, 409, 500), мы пойдем в catch!
+      await onAddClient({
+        name: name.trim(),
+        unp: unp.trim(),
+        iban: iban.trim().toUpperCase(),
+        factoringLimit: Number(limit),
+        rating,
+      });
 
-    onAddClient(newClient);
-    onClose();
-    setName('');
-    setUnp('');
+      // Успех: закрываем модалку и сбрасываем форму
+      setIsSubmitting(false);
+      onClose();
+      setName('');
+      setUnp('');
+    } catch (err: any) {
+      // 🎯 Ошибка поймана! Форма НЕ стерлась, пользователь видит причину
+      setIsSubmitting(false);
+      setErrorMessage(err.message || 'Не удалось зарегистрировать клиента на сервере.');
+    }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Регистрация нового клиента (Поставщика)">
       <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-semibold animate-shake">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            {error}
+        {/* Интерактивная плашка ошибки (вместо убогого alert) */}
+        {errorMessage && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 font-semibold animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <strong className="block font-bold">Ошибка сервера:</strong>
+              {errorMessage}
+            </div>
           </div>
         )}
 
-        {/* 1. Наименование */}
+        {/* Наименование */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
             Наименование предприятия
@@ -75,15 +88,16 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
             <input
               type="text"
               required
+              disabled={isSubmitting}
               placeholder="например, ОАО «Кузлитмаш»"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-bank-500/20 focus:border-bank-500"
+              className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-bank-500/20 focus:border-bank-500 disabled:opacity-50"
             />
           </div>
         </div>
 
-        {/* 2. УНП */}
+        {/* УНП */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
             УНП (9 цифр РБ)
@@ -91,82 +105,57 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
           <input
             type="text"
             required
+            disabled={isSubmitting}
             placeholder="200024151"
             value={unp}
             onChange={(e) => handleUnpChange(e.target.value)}
-            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-bank-500/20 focus:border-bank-500"
+            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-bank-500/20 focus:border-bank-500 disabled:opacity-50"
           />
           <span className="text-[10px] text-slate-400 mt-1 block">
             Введено: {unp.length}/9 цифр
           </span>
         </div>
 
-        {/* 🎯 3. ВМЕСТО УРОДСКОГО ВЫПАДАЮЩЕГО СПИСКА — СТИЛЬНЫЙ SEGMENTED CONTROL */}
+        {/* Рейтинг (Segmented Control) */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
             Рейтинг кредитоспособности (Оценка рисков ЦБУ)
           </label>
           <div className="grid grid-cols-3 gap-2">
-            {/* Вариант А */}
-            <button
-              type="button"
-              onClick={() => setRating('A')}
-              className={`p-2.5 rounded-xl border text-left transition-all relative ${
-                rating === 'A'
-                  ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20 text-emerald-900 shadow-sm'
-                  : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 text-slate-600'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black block">Класс A</span>
-                {rating === 'A' && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
-                Высокая надежность
-              </span>
-            </button>
+            {(['A', 'B', 'C'] as const).map((r) => {
+              const isSelected = rating === r;
+              const titleMap = { A: 'Класс A', B: 'Класс B', C: 'Класс C' };
+              const descMap = { A: 'Высокая надежность', B: 'Умеренный риск', C: 'Особый контроль' };
+              const colorMap = {
+                A: 'border-emerald-500 bg-emerald-50/80 text-emerald-900',
+                B: 'border-amber-500 bg-amber-50/80 text-amber-900',
+                C: 'border-rose-500 bg-rose-50/80 text-rose-900',
+              };
 
-            {/* Вариант B */}
-            <button
-              type="button"
-              onClick={() => setRating('B')}
-              className={`p-2.5 rounded-xl border text-left transition-all relative ${
-                rating === 'B'
-                  ? 'border-amber-500 bg-amber-50/80 ring-2 ring-amber-500/20 text-amber-900 shadow-sm'
-                  : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 text-slate-600'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black block">Класс B</span>
-                {rating === 'B' && <Check className="w-3.5 h-3.5 text-amber-600" />}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
-                Умеренный риск
-              </span>
-            </button>
-
-            {/* Вариант C */}
-            <button
-              type="button"
-              onClick={() => setRating('C')}
-              className={`p-2.5 rounded-xl border text-left transition-all relative ${
-                rating === 'C'
-                  ? 'border-rose-500 bg-rose-50/80 ring-2 ring-rose-500/20 text-rose-900 shadow-sm'
-                  : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 text-slate-600'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black block">Класс C</span>
-                {rating === 'C' && <Check className="w-3.5 h-3.5 text-rose-600" />}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
-                Особый контроль
-              </span>
-            </button>
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setRating(r)}
+                  className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                    isSelected
+                      ? `${colorMap[r]} ring-2 ring-offset-1 shadow-sm font-bold`
+                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs block">{titleMap[r]}</span>
+                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <span className="text-[10px] opacity-75 block mt-0.5">{descMap[r]}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* 4. Расчетный счет IBAN */}
+        {/* IBAN */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
             Расчетный счет IBAN
@@ -174,13 +163,14 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
           <input
             type="text"
             required
+            disabled={isSubmitting}
             value={iban}
             onChange={(e) => setIban(e.target.value.toUpperCase())}
-            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-mono font-bold text-slate-800 focus:outline-none focus:border-bank-500"
+            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-mono font-bold text-slate-800 focus:outline-none focus:border-bank-500 disabled:opacity-50"
           />
         </div>
 
-        {/* 5. Лимит */}
+        {/* Лимит */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
             Утвержденный лимит факторинга (BYN)
@@ -190,9 +180,10 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
             min="1000"
             step="1000"
             required
+            disabled={isSubmitting}
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
-            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-black text-bank-600 focus:outline-none focus:border-bank-500"
+            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-black text-bank-600 focus:outline-none focus:border-bank-500 disabled:opacity-50"
           />
         </div>
 
@@ -205,16 +196,19 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
           >
             Отмена
           </button>
           <button
             type="submit"
-            className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-bank-600 hover:bg-bank-700 shadow-md shadow-bank-600/20 transition-all active:scale-95"
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-bank-600 hover:bg-bank-700 disabled:bg-slate-300 shadow-md shadow-bank-600/20 transition-all active:scale-95"
           >
-            Зарегистрировать клиента
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>{isSubmitting ? 'Сохранение в БД...' : 'Зарегистрировать клиента'}</span>
           </button>
         </div>
       </form>

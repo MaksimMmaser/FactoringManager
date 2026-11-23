@@ -1,16 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Search, Filter, Check, ChevronDown, Layers, FileCheck, DollarSign } from 'lucide-react';
 import { UploadRegistryModal } from '../components/UploadRegistryModal';
-import type { FactoringRegistry } from '../types/dashboard';
+import type { FactoringRegistry, FactoringContract, DebtorItem } from '../types/dashboard';
 
 interface OperationsPageProps {
   registries: FactoringRegistry[];
+  contracts: FactoringContract[]; // 👈 Для выбора договора в модалке
+  debtors: DebtorItem[];          // 👈 Для выбора дебиторов в накладных
   availableLimit: number;
-  onAddRegistry: (registry: FactoringRegistry) => void;
+  onAddRegistry: (registry: any) => void;
 }
 
 export const OperationsPage: React.FC<OperationsPageProps> = ({
   registries,
+  contracts,
+  debtors,
   availableLimit,
   onAddRegistry,
 }) => {
@@ -31,7 +35,6 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Фильтрация реестров
   const filteredRegistries = registries.filter((r) => {
     const matchesSearch = 
       r.registryNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -40,7 +43,6 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
     return matchesSearch && matchesStatus;
   });
 
-  // Статистика операций
   const totalVolume = registries.reduce((sum, r) => sum + r.totalAmount, 0);
   const totalFinanced = registries.reduce((sum, r) => sum + r.advanceAmount, 0);
   const totalBankFee = registries.reduce((sum, r) => sum + r.commissionAmount, 0);
@@ -50,7 +52,7 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* 1. Шапка страницы */}
+      {/* Шапка */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
@@ -69,7 +71,7 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
         </button>
       </div>
 
-      {/* 2. Сводные метрики операционного дня */}
+      {/* Метрики дня */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
@@ -102,7 +104,7 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
         </div>
       </div>
 
-      {/* 3. Поиск и фильтры */}
+      {/* Поиск и фильтры */}
       <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -159,7 +161,7 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
         </div>
       </div>
 
-      {/* 4. Отображение реестров (Table-to-Card) */}
+      {/* Список реестров */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {filteredRegistries.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 font-medium">
@@ -167,7 +169,7 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
           </div>
         ) : (
           <>
-            {/* 📱 МОБИЛЬНЫЙ ВИД (< md) БЕЗ СКРОЛЛА */}
+            {/* Мобильный вид */}
             <div className="divide-y divide-slate-100 md:hidden">
               {filteredRegistries.map((reg) => (
                 <div key={reg.id} className="p-4 space-y-2.5 hover:bg-slate-50/50 transition-colors">
@@ -200,7 +202,7 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
               ))}
             </div>
 
-            {/* 💻 ДЕСКТОПНЫЙ ВИД (>= md) */}
+            {/* Десктопная таблица */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50/75 text-[11px] text-slate-400 uppercase font-bold border-b border-slate-100">
@@ -242,11 +244,13 @@ export const OperationsPage: React.FC<OperationsPageProps> = ({
         )}
       </div>
 
-      {/* Модалка загрузки реестра */}
+      {/* Модалка с реальными договорами и дебиторами из БД */}
       <UploadRegistryModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         availableLimit={availableLimit}
+        contracts={contracts}
+        debtors={debtors}
         onSuccess={onAddRegistry}
       />
     </div>
