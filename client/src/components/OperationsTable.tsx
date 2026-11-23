@@ -4,20 +4,17 @@ import type { RecentOperation, OperationStatus } from '../types/dashboard';
 
 interface OperationsTableProps {
   operations: RecentOperation[];
-  onRepay?: (invoiceId: string) => void; // 👈 Добавили обработчик погашения
+  onRepay?: (invoiceId: string) => void;
 }
 
 type FilterOption = 'ALL' | 'FINANCED' | 'PAID' | 'OVERDUE';
 
-export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, onRepay }) =>  {
-  // Состояние кастомного выпадающего списка
+export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, onRepay }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<FilterOption>('ALL');
 
-  // useRef для отслеживания клика вне выпадающего списка
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Список вариантов в меню фильтра
   const filterOptions: { id: FilterOption; label: string }[] = [
     { id: 'ALL', label: 'Все операции' },
     { id: 'FINANCED', label: 'Только выплаты аванса' },
@@ -25,7 +22,6 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, on
     { id: 'OVERDUE', label: 'Только просроченные' },
   ];
 
-  // Хук useEffect для закрытия меню при клике в любое другое место экрана
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -37,18 +33,16 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, on
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Реальная фильтрация операций в памяти
   const filteredOperations = operations.filter((op) => {
     if (selectedFilter === 'FINANCED') return op.status === 'Financed';
     if (selectedFilter === 'PAID') return op.status === 'Paid';
     if (selectedFilter === 'OVERDUE') return op.status === 'Overdue';
-    return true; // 'ALL'
+    return true;
   });
 
   const formatMoney = (val: number) =>
     new Intl.NumberFormat('ru-RU').format(val) + ' BYN';
 
-  // Бейджи статусов
   const renderBadge = (status: OperationStatus) => {
     switch (status) {
       case 'Financed':
@@ -77,7 +71,6 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, on
           </p>
         </div>
 
-        {/* 🎯 НАШ КАСТОМНЫЙ БАНКОВСКИЙ ВЫПАДАЮЩИЙ СПИСОК */}
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
@@ -88,7 +81,6 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, on
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-bank-600' : ''}`} />
           </button>
 
-          {/* Всплывающее меню вариантов */}
           {isDropdownOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-1.5 z-30 animate-in fade-in slide-in-from-top-2 duration-150">
               {filterOptions.map((option) => {
@@ -116,7 +108,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, on
         </div>
       </div>
 
-      {/* 📱 1. МОБИЛЬНЫЙ ВИД: Карточки транзакций (< md) БЕЗ ГОРИЗОНТАЛЬНОГО СКРОЛЛА */}
+      {/* 📱 1. МОБИЛЬНЫЙ ВИД (< md) С КНОПКОЙ ПОГАСИТЬ */}
       <div className="divide-y divide-slate-100 md:hidden">
         {filteredOperations.length === 0 ? (
           <div className="p-6 text-center text-xs text-slate-400 font-medium">
@@ -132,20 +124,33 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, on
                 {renderBadge(op.status)}
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs text-slate-400 font-medium">
-                  {op.date}
-                </span>
-                <span className="text-base font-black text-slate-900 tracking-tight">
-                  {formatMoney(op.amount)}
-                </span>
+              <div className="flex items-center justify-between pt-1 gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 font-medium">
+                    {op.date}
+                  </span>
+                  <span className="text-base font-black text-slate-900 tracking-tight">
+                    {formatMoney(op.amount)}
+                  </span>
+                </div>
+
+                {/* 🎯 Кнопка погашения для мобильной версии */}
+                {op.status !== 'Paid' && onRepay && (
+                  <button
+                    type="button"
+                    onClick={() => onRepay(op.id)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-bank-50 active:bg-bank-100 hover:text-bank-700 text-slate-700 rounded-xl text-xs font-bold transition-colors shrink-0 min-h-[36px]"
+                  >
+                    Погасить
+                  </button>
+                )}
               </div>
             </div>
           ))
         )}
       </div>
 
-      {/* 💻 2. ДЕСКТОПНЫЙ ВИД: Классическая просторная таблица (>= md) */}
+      {/* 💻 2. ДЕСКТОПНЫЙ ВИД (>= md) */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50/75 text-[11px] text-slate-400 uppercase font-bold border-b border-slate-100">
@@ -171,22 +176,21 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({ operations, on
                   <td className="py-4 px-6 font-semibold text-slate-800">{op.counterparty}</td>
                   <td className="py-4 px-6 text-right font-extrabold text-slate-900 whitespace-nowrap">{formatMoney(op.amount)}</td>
                   <td className="py-4 px-6 text-center">{renderBadge(op.status)}</td>
-                <td className="py-4 px-6 text-right">
-                  {/* Если накладная еще не оплачена — показываем кнопку "Погасить" */}
-                  {op.status !== 'Paid' && onRepay ? (
-                    <button
-                      type="button"
-                      onClick={() => onRepay(op.id)}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-bank-50 hover:text-bank-700 text-slate-700 rounded-lg text-xs font-bold transition-colors"
-                      title="Дебитор перевел деньги в банк"
-                    >
-                      Погасить
-                    </button>
-                  ) : (
-                    <span className="text-xs text-slate-400 font-mono">—</span>
-                  )}
-                </td>
-              </tr>
+                  <td className="py-4 px-6 text-right">
+                    {op.status !== 'Paid' && onRepay ? (
+                      <button
+                        type="button"
+                        onClick={() => onRepay(op.id)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-bank-50 hover:text-bank-700 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                        title="Дебитор перевел деньги в банк"
+                      >
+                        Погасить
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-400 font-mono">—</span>
+                    )}
+                  </td>
+                </tr>
               ))
             )}
           </tbody>

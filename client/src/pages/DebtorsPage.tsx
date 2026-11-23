@@ -5,7 +5,7 @@ import type { DebtorItem, DebtorRiskCategory } from '../types/dashboard';
 
 interface DebtorsPageProps {
   debtors: DebtorItem[];
-  onAddDebtor: (debtor: DebtorItem) => void;
+  onAddDebtor: (debtorData: any) => Promise<void> | void;
 }
 
 export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }) => {
@@ -26,19 +26,17 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Фильтрация
   const filteredDebtors = debtors.filter((d) => {
-    const matchesSearch = 
+    const matchesSearch =
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.unp.includes(searchQuery);
     const matchesCategory = categoryFilter === 'ALL' || d.riskCategory === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
-  // Финансовая статистика по дебиторам
   const totalDebt = debtors.reduce((sum, d) => sum + d.currentDebt, 0);
   const totalOverdue = debtors.reduce((sum, d) => sum + d.overdueDebt, 0);
-  const stopListCount = debtors.filter(d => d.riskCategory === 'StopList').length;
+  const stopListCount = debtors.filter((d) => d.riskCategory === 'StopList').length;
 
   const formatMoney = (val: number) =>
     new Intl.NumberFormat('ru-RU').format(val) + ' BYN';
@@ -46,11 +44,11 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
   const renderBadge = (category: DebtorRiskCategory) => {
     switch (category) {
       case 'Reliable':
-        return <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black">Надежный</span>;
+        return <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black shrink-0">Надежный</span>;
       case 'UnderControl':
-        return <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg text-[10px] font-black">Под контролем</span>;
+        return <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg text-[10px] font-black shrink-0">Под контролем</span>;
       case 'StopList':
-        return <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-lg text-[10px] font-black">Стоп-лист</span>;
+        return <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-lg text-[10px] font-black shrink-0">Стоп-лист</span>;
     }
   };
 
@@ -87,7 +85,7 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-rose-200 bg-rose-50/30 shadow-sm flex items-center gap-3">
+        <div className="p-4 rounded-2xl border border-rose-200 bg-rose-50/30 shadow-sm flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
             <AlertTriangle className="w-5 h-5" />
           </div>
@@ -103,7 +101,7 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
           </div>
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">В стоп-листе банка</span>
-            <span className="text-lg font-black text-slate-900">{stopListCount} предприятия</span>
+            <span className="text-lg font-black text-slate-900">{stopListCount} предпр.</span>
           </div>
         </div>
       </div>
@@ -121,7 +119,6 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
           />
         </div>
 
-        {/* Меню фильтра категорий */}
         <div className="relative shrink-0" ref={filterRef}>
           <button
             type="button"
@@ -150,7 +147,7 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
                 <button
                   key={item.id}
                   onClick={() => {
-                    setCategoryFilter(item.id as any);
+                    setCategoryFilter(item.id as 'ALL' | DebtorRiskCategory);
                     setIsFilterOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
@@ -179,15 +176,18 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
             {/* 📱 МОБИЛЬНЫЙ ВИД (< md) */}
             <div className="divide-y divide-slate-100 md:hidden">
               {filteredDebtors.map((debtor) => {
-                const percentUsed = Math.min(100, Math.round((debtor.currentDebt / debtor.subLimit) * 100));
+                const percentUsed =
+                  debtor.subLimit > 0
+                    ? Math.min(100, Math.round((debtor.currentDebt / debtor.subLimit) * 100))
+                    : 0;
                 return (
                   <div key={debtor.id} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-bank-50 flex items-center justify-center text-bank-600">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-bank-50 flex items-center justify-center text-bank-600 shrink-0">
                           <Building2 className="w-4 h-4" />
                         </div>
-                        <span className="font-bold text-slate-900 text-sm">{debtor.name}</span>
+                        <span className="font-bold text-slate-900 text-sm truncate">{debtor.name}</span>
                       </div>
                       {renderBadge(debtor.riskCategory)}
                     </div>
@@ -200,7 +200,6 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
                       </span>
                     </div>
 
-                    {/* Полоса сублимита */}
                     <div className="pt-2 border-t border-slate-100 space-y-1.5">
                       <div className="flex justify-between text-[11px]">
                         <span className="text-slate-400 font-medium">Занято из сублимита:</span>
@@ -215,7 +214,14 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
                         />
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-400 pt-0.5">
-                        <span>Долг: {formatMoney(debtor.currentDebt)}</span>
+                        <span>
+                          Долг: {formatMoney(debtor.currentDebt)}
+                          {debtor.overdueDebt > 0 && (
+                            <span className="text-rose-600 font-bold ml-1">
+                              (проср. {formatMoney(debtor.overdueDebt)})
+                            </span>
+                          )}
+                        </span>
                         <span>Сублимит: {formatMoney(debtor.subLimit)}</span>
                       </div>
                     </div>
@@ -239,7 +245,10 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredDebtors.map((debtor) => {
-                    const percentUsed = Math.min(100, Math.round((debtor.currentDebt / debtor.subLimit) * 100));
+                    const percentUsed =
+                      debtor.subLimit > 0
+                        ? Math.min(100, Math.round((debtor.currentDebt / debtor.subLimit) * 100))
+                        : 0;
                     return (
                       <tr key={debtor.id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="py-4 px-6 font-bold text-slate-900">{debtor.name}</td>
@@ -286,7 +295,6 @@ export const DebtorsPage: React.FC<DebtorsPageProps> = ({ debtors, onAddDebtor }
         )}
       </div>
 
-      {/* Попап создания дебитора */}
       <CreateDebtorModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

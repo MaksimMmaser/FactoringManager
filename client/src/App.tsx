@@ -100,18 +100,14 @@ export default function App() {
   };
 
   const handleAddDebtor = async (newDebtorData: any) => {
-    try {
-      await factoringApi.createDebtor({
-        name: newDebtorData.name,
-        unp: newDebtorData.unp,
-        subLimit: newDebtorData.subLimit,
-        averagePaymentDays: newDebtorData.averagePaymentDays,
-        riskCategory: newDebtorData.riskCategory,
-      });
-      await loadAllData();
-    } catch (err: any) {
-      alert(err.message || 'Ошибка регистрации дебитора');
-    }
+    await factoringApi.createDebtor({
+      name: newDebtorData.name,
+      unp: newDebtorData.unp,
+      subLimit: newDebtorData.subLimit,
+      averagePaymentDays: newDebtorData.averagePaymentDays,
+      riskCategory: newDebtorData.riskCategory,
+    });
+    await loadAllData();
   };
 
   const handleAddRegistry = async (newRegistryData: any) => {

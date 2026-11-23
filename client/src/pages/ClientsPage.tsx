@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UserPlus, Search, Filter, Check, ChevronDown, Building2} from 'lucide-react';
+import { UserPlus, Search, Filter, Check, ChevronDown, Building2, FileText } from 'lucide-react';
 import { CreateClientModal } from '../components/CreateClientModal';
 import type { ClientItem } from '../types/dashboard';
 
 interface ClientsPageProps {
   clients: ClientItem[];
-  onAddClient: (client: ClientItem) => void;
+  onAddClient: (clientData: any) => Promise<void> | void;
 }
 
 export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }) => {
@@ -26,9 +26,8 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Фильтрация
   const filteredClients = clients.filter((c) => {
-    const matchesSearch = 
+    const matchesSearch =
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.unp.includes(searchQuery);
     const matchesRating = ratingFilter === 'ALL' || c.rating === ratingFilter;
@@ -38,17 +37,21 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
   const formatMoney = (val: number) =>
     new Intl.NumberFormat('ru-RU').format(val) + ' BYN';
 
-  // Бейдж рейтинга
-  const renderRatingBadge = (rating: 'A' | 'B' | 'C') => {
-    switch (rating) {
-      case 'A':
-        return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black">Рейтинг A</span>;
-      case 'B':
-        return <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-lg text-[10px] font-black">Рейтинг B</span>;
-      case 'C':
-        return <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-lg text-[10px] font-black">Рейтинг C</span>;
-    }
+ const renderRatingBadge = (rating: 'A' | 'B' | 'C') => {
+  const config = {
+    A: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'A' },
+    B: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'B' },
+    C: { bg: 'bg-rose-100', text: 'text-rose-800', label: 'C' },
   };
+  const c = config[rating];
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 ${c.bg} ${c.text} rounded-full text-[11px] font-black whitespace-nowrap shrink-0`}>
+      <span className="opacity-60 font-semibold text-[9px] uppercase tracking-wide">Рейтинг</span>
+      <span>{c.label}</span>
+    </span>
+  );
+};
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -84,7 +87,6 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
           />
         </div>
 
-        {/* Меню фильтра рейтинга */}
         <div className="relative shrink-0" ref={filterRef}>
           <button
             type="button"
@@ -108,7 +110,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
                 <button
                   key={item.id}
                   onClick={() => {
-                    setRatingFilter(item.id as any);
+                    setRatingFilter(item.id as 'ALL' | 'A' | 'B' | 'C');
                     setIsFilterOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
@@ -126,7 +128,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
         </div>
       </div>
 
-      {/* 3. Список клиентов (Table-to-Card) */}
+      {/* 3. Список клиентов (Table-to-Card с полным паритетом данных) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {filteredClients.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 font-medium">
@@ -137,21 +139,33 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
             {/* 📱 МОБИЛЬНЫЙ ВИД (< md) */}
             <div className="divide-y divide-slate-100 md:hidden">
               {filteredClients.map((client) => {
-                const percentUsed = Math.min(100, Math.round((client.usedLimit / client.factoringLimit) * 100));
+                const percentUsed =
+                  client.factoringLimit > 0
+                    ? Math.min(100, Math.round((client.usedLimit / client.factoringLimit) * 100))
+                    : 0;
                 return (
                   <div key={client.id} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-bank-50 flex items-center justify-center text-bank-600">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-bank-50 flex items-center justify-center text-bank-600 shrink-0">
                           <Building2 className="w-4 h-4" />
                         </div>
-                        <span className="font-bold text-slate-900 text-sm">{client.name}</span>
+                        <span className="font-bold text-slate-900 text-sm truncate">
+                          {client.name || '(Без названия)'}
+                        </span>
                       </div>
                       {renderRatingBadge(client.rating)}
                     </div>
 
-                    <div className="text-xs text-slate-500 font-mono pl-9">
-                      УНП: <strong className="text-slate-800">{client.unp}</strong>
+                    {/* 🎯 УНП слева + количество договоров справа! */}
+                    <div className="flex items-center justify-between gap-2 pl-9 text-xs">
+                      <span className="text-slate-500 font-mono">
+                        УНП: <strong className="text-slate-800">{client.unp || '—'}</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[11px] font-bold">
+                        <FileText className="w-3 h-3 text-slate-500" />
+                        Договоров: {client.activeContractsCount}
+                      </span>
                     </div>
 
                     {/* Полоса утилизации лимита */}
@@ -193,13 +207,16 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredClients.map((client) => {
-                    const percentUsed = Math.min(100, Math.round((client.usedLimit / client.factoringLimit) * 100));
+                    const percentUsed =
+                      client.factoringLimit > 0
+                        ? Math.min(100, Math.round((client.usedLimit / client.factoringLimit) * 100))
+                        : 0;
                     return (
                       <tr key={client.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-4 px-6 font-bold text-slate-900">{client.name}</td>
+                        <td className="py-4 px-6 font-bold text-slate-900">{client.name || '(Без названия)'}</td>
                         <td className="py-4 px-6 text-xs text-slate-600 font-mono">
-                          <div>УНП: <span className="font-bold text-slate-800">{client.unp}</span></div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">{client.iban}</div>
+                          <div>УНП: <span className="font-bold text-slate-800">{client.unp || '—'}</span></div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{client.iban || '—'}</div>
                         </td>
                         <td className="py-4 px-6 text-center">{renderRatingBadge(client.rating)}</td>
                         <td className="py-4 px-6 text-right font-black text-slate-900">
@@ -236,7 +253,6 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ clients, onAddClient }
         )}
       </div>
 
-      {/* Попап заведения клиента */}
       <CreateClientModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

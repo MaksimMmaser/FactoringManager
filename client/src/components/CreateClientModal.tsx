@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { Building, ShieldCheck, AlertCircle, Check, Loader2 } from 'lucide-react';
-import type { ClientItem } from '../types/dashboard';
+// import type { ClientItem } from '../types/dashboard';
 
 interface CreateClientModalProps {
   isOpen: boolean;

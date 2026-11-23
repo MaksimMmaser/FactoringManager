@@ -10,6 +10,7 @@ import {
   FileSpreadsheet, 
   X
 } from 'lucide-react';
+import { BankLogo } from './BankLogo';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -48,9 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {/* Логотип */}
         <div className="h-16 lg:h-20 flex items-center justify-between px-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-bank-600 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-bank-600/20">
-              🌱
-            </div>
+            <BankLogo className="w-10 h-10 shrink-0 shadow-md shadow-bank-600/20 rounded-[11px]" />
             <div>
               <span className="font-bold text-slate-800 text-lg leading-tight block tracking-tight">
                 ФАКТОРИНГ
