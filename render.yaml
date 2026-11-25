@@ -1,0 +1,18 @@
+services:
+  - type: pserv
+    name: factoring-api
+    runtime: docker
+    dockerfilePath: server/Dockerfile
+    envVars:
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: factoring-db
+          property: connectionString
+      - key: AUTO_MIGRATE
+        value: "true"
+      - key: ENABLE_OPENAPI
+        value: "true"
+
+databases:
+  - name: factoring-db
+    plan: free
